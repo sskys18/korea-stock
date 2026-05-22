@@ -184,10 +184,10 @@ impl DomesticStock<'_> {
 
 ### 3.7 실시간 WebSocket (realtime/)
 
-- `wss://ops.koreainvestment.com:21000` (실전) / `:31000` (모의).
+- `ws://ops.koreainvestment.com:21000` (실전) / `ws://ops.koreainvestment.com:31000` (모의).
 - `approval_key`: `POST /oauth2/Approval`로 발급 (access token과 별개).
 - `approval` 발급 요청 Body 필드명은 `secretkey` (REST 토큰 발급의 `appsecret`과 다름).
-- 구독: JSON 프레임 `{header:{tr_type:"1"}, body:{input:{tr_id, tr_key}}}`. 해지 `tr_type:"0"`.
+- 구독: JSON 프레임 `{header:{tr_type:"1"}, body:{input:{tr_id, tr_key}}}`. 해지 `tr_type:"2"`.
 - 수신 데이터: **2단계 구분자** — 프레임 레벨 `|`(파이프), 실데이터 필드 `^`(캐럿).
   `decode.rs`가 `|`로 분해 후 데이터부를 `^`로 분해해 tr_id별 필드 순서 매핑.
 - 체결통보(H0STCNI0 실전/H0STCNI9 모의): 구독 응답 `body.output.{key,iv}`에 AES key/iv 포함
@@ -196,7 +196,7 @@ impl DomesticStock<'_> {
 - API: `subscribe(kind, key) -> Result<SubscriptionHandle>`. `SubscriptionHandle`은
   `unsubscribe().await` 제공 + `Drop` 시 자동 해지 프레임 전송(best-effort).
   이벤트는 생성 시 받은 단일 `mpsc::Receiver<RealtimeEvent>`로 노출 — 이벤트에 `tr_id`+`tr_key` 포함되어 호출자가 분기.
-- 이벤트 채널 용량 고정(기본 1024). 가득 차면 **최신 우선 정책 아님** — 송신측이 블록되지 않도록 가장 오래된 이벤트 드롭 + `RealtimeEvent::Lagged(n)` 통지.
+- 이벤트 채널 용량 고정(기본 1024). 가득 차면 송신측이 블록되지 않도록 새 이벤트를 드롭(drop-newest)하고 `RealtimeEvent::Lagged(n)`으로 유실 건수를 통지.
 - 구독 상태는 `RealtimeClient` 내부 `Mutex<HashMap<(tr_id,key), SubState>>`로 관리. 재연결 중 subscribe/unsubscribe는 이 락으로 직렬화.
 - 자동 재연결: 연결 끊김 시 지수 백오프 재연결 + 등록된 구독 전체 재전송. PINGPONG 프레임 응답 처리.
 - 동시 구독 한도 약 41건 — 초과 시 `subscribe`가 `KisError::Ws` 반환.

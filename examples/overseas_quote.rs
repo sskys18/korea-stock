@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let price = os.current_price(OverseasExchange::Nasd, &symbol).await?;
     println!("{symbol} 현재가: {} ({})", price.last, price.rate);
 
-    let (summary, candles) = os
+    let page = os
         .period_price(
             OverseasExchange::Nasd,
             &symbol,
@@ -25,7 +25,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             true,
         )
         .await?;
-    println!("종목 {} — 일봉 {}건", summary.rsym, candles.len());
+    let (summary, candles) = &page.data;
+    println!(
+        "종목 {} — 일봉 {}건 (다음페이지: {})",
+        summary.rsym,
+        candles.len(),
+        page.has_next()
+    );
     for c in candles.iter().take(5) {
         println!("  {} 종가 {} 거래량 {}", c.xymd, c.clos, c.tvol);
     }

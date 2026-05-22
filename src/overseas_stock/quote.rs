@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::client::ApiCall;
+use crate::client::{ApiCall, KisResponse};
 use crate::error::Result;
 use crate::overseas_stock::{OverseasExchange, OverseasStock};
 use crate::trid::TrId;
@@ -108,7 +108,7 @@ impl OverseasStock<'_> {
     }
 
     /// 해외주식 기간별시세 (TR 8). `base_date` YYYYMMDD(공란이면 최근일).
-    /// (요약, 봉배열) 반환.
+    /// envelope의 `data`는 (요약, 봉배열). `tr_cont`로 연속조회 가능.
     pub async fn period_price(
         &self,
         exchange: OverseasExchange,
@@ -116,7 +116,7 @@ impl OverseasStock<'_> {
         period: OverseasPeriod,
         base_date: &str,
         adjusted: bool,
-    ) -> Result<(OverseasPeriodSummary, Vec<OverseasPeriodCandle>)> {
+    ) -> Result<KisResponse<(OverseasPeriodSummary, Vec<OverseasPeriodCandle>)>> {
         let env = self.client.config().environment;
         let resp = self
             .client
@@ -137,6 +137,8 @@ impl OverseasStock<'_> {
                 needs_hashkey: false,
             })
             .await?;
-        Ok((resp.field("output1")?, resp.field("output2")?))
+        let summary: OverseasPeriodSummary = resp.field("output1")?;
+        let candles: Vec<OverseasPeriodCandle> = resp.field("output2")?;
+        Ok(resp.envelope((summary, candles)))
     }
 }

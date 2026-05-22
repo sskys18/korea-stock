@@ -270,7 +270,7 @@ H0STCNI0/H0STCNI9 체결통보, HDFSCNT0 해외주식체결가.
 
 ## 6. 검증 전략
 
-- **단위 테스트**: 직렬화/역직렬화, TR ID 환경 분기, 레이트리미터 토큰버킷, AES 복호화(KIS 문서 샘플 벡터).
+- **단위 테스트**: 직렬화/역직렬화, TR ID 환경 분기, 레이트리미터 토큰버킷, AES 복호화(고정 AES-CBC fixture; KIS 공식 KAT 부재 시 자체 fixture).
 - **통합 테스트** (`tests/integration.rs`, `#[ignore]`): 모의투자 환경 실호출 — 토큰 발급, 현재가 조회, 잔고 조회, WebSocket 구독 1건. 자격증명은 env var(`KIS_APP_KEY` 등)로 주입, 없으면 skip.
 - `cargo build`, `cargo clippy -- -D warnings`, `cargo test`.
 - examples 수동 실행 확인.

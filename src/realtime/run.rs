@@ -73,6 +73,17 @@ async fn run_one_connection(ctx: &mut ConnectionCtx, url: &str) -> ConnEnd {
     };
     let (mut sink, mut stream) = ws.split();
 
+    // 죽은 연결 동안 큐에 쌓인 control 메시지를 resubscribe 전에 선반영 —
+    // drop된 핸들의 Unsubscribe가 먼저 처리돼 해지된 구독이 재전송(replay)되지 않도록.
+    {
+        let mut map = ctx.subs.lock().await;
+        while let Ok(msg) = ctx.control_rx.try_recv() {
+            if let ControlMsg::Unsubscribe { tr_id, tr_key } = msg {
+                map.remove(&(tr_id, tr_key));
+            }
+        }
+    }
+
     {
         let map = ctx.subs.lock().await;
         for ((tr_id, tr_key), state) in map.iter() {
@@ -226,7 +237,8 @@ async fn emit_record(ctx: &ConnectionCtx, tr_id: &str, rec: DecodedRecord) {
         },
         DecodedRecord::OverseasTrade(d) => RealtimeEvent::OverseasTrade {
             tr_id,
-            tr_key: d.symb.clone(),
+            // 구독 키는 실시간 종목코드(rsym) — symb(단축코드)가 아님.
+            tr_key: d.rsym.clone(),
             data: d,
         },
     };

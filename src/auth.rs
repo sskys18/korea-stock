@@ -11,6 +11,9 @@ use crate::error::{KisError, Result};
 struct CachedToken {
     access_token: String,
     expires_at: DateTime<Utc>,
+    /// 발급 환경+앱키 식별자 — 실전/모의·다중 앱키 토큰 혼용 방지.
+    #[serde(default)]
+    scope: String,
 }
 
 impl CachedToken {
@@ -68,6 +71,11 @@ impl Auth {
         Ok(token)
     }
 
+    /// 토큰 캐시 스코프 — `{rest_base}|{app_key}`. 환경·앱키별 격리.
+    fn scope(&self) -> String {
+        format!("{}|{}", self.rest_base, self.app_key)
+    }
+
     async fn issue(&self) -> Result<CachedToken> {
         #[derive(Deserialize)]
         struct TokenResponse {
@@ -93,6 +101,7 @@ impl Auth {
         Ok(CachedToken {
             access_token: tr.access_token,
             expires_at: Utc::now() + ChronoDuration::seconds(tr.expires_in),
+            scope: self.scope(),
         })
     }
 
@@ -122,7 +131,12 @@ impl Auth {
     async fn load_cache(&self) -> Option<CachedToken> {
         let path = self.cache_path.as_ref()?;
         let data = tokio::fs::read(path).await.ok()?;
-        serde_json::from_slice(&data).ok()
+        let token: CachedToken = serde_json::from_slice(&data).ok()?;
+        // 다른 환경·앱키로 발급된 토큰이면 무시 — 캐시 파일 공유 시 혼용 방지.
+        if token.scope != self.scope() {
+            return None;
+        }
+        Some(token)
     }
 
     /// 임시파일 → chmod 0600 → atomic rename. 실패 시 warn만 (치명적 아님).
@@ -168,6 +182,7 @@ mod tests {
         let t = CachedToken {
             access_token: "x".into(),
             expires_at: Utc::now() + ChronoDuration::hours(5),
+            scope: String::new(),
         };
         assert!(t.is_fresh());
     }
@@ -177,6 +192,7 @@ mod tests {
         let t = CachedToken {
             access_token: "x".into(),
             expires_at: Utc::now() + ChronoDuration::minutes(30),
+            scope: String::new(),
         };
         assert!(!t.is_fresh(), "만료 1시간 이내는 stale");
     }

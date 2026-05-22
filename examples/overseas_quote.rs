@@ -23,6 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             OverseasPeriod::Daily,
             "",
             true,
+            false,
         )
         .await?;
     let (summary, candles) = &page.data;

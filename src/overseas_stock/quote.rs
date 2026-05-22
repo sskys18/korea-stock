@@ -108,7 +108,8 @@ impl OverseasStock<'_> {
     }
 
     /// 해외주식 기간별시세 (TR 8). `base_date` YYYYMMDD(공란이면 최근일).
-    /// envelope의 `data`는 (요약, 봉배열). `tr_cont`로 연속조회 가능.
+    /// envelope의 `data`는 (요약, 봉배열). 첫 페이지는 `cont=false`,
+    /// 응답이 `has_next()`이면 `cont=true`로 재호출해 다음 페이지 수집.
     pub async fn period_price(
         &self,
         exchange: OverseasExchange,
@@ -116,6 +117,7 @@ impl OverseasStock<'_> {
         period: OverseasPeriod,
         base_date: &str,
         adjusted: bool,
+        cont: bool,
     ) -> Result<KisResponse<(OverseasPeriodSummary, Vec<OverseasPeriodCandle>)>> {
         let env = self.client.config().environment;
         let resp = self
@@ -124,7 +126,7 @@ impl OverseasStock<'_> {
                 method: reqwest::Method::GET,
                 path: "/uapi/overseas-price/v1/quotations/dailyprice".into(),
                 tr_id: TR_PERIOD.resolve(env)?.into(),
-                tr_cont: None,
+                tr_cont: if cont { Some("N".to_string()) } else { None },
                 params: serde_json::json!({
                     "AUTH": "",
                     "EXCD": exchange.excd(),

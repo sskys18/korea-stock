@@ -155,7 +155,7 @@ impl OverseasStock<'_> {
         &self,
         exchange: OverseasExchange,
         cursor: Option<(&str, &str)>,
-    ) -> Result<KisResponse<(Vec<OverseasBalanceItem>, Vec<OverseasBalanceSummary>)>> {
+    ) -> Result<KisResponse<(Vec<OverseasBalanceItem>, OverseasBalanceSummary)>> {
         let env = self.client.config().environment;
         let (fk, nk) = cursor.unwrap_or(("", ""));
         let params = self.with_account(serde_json::json!({
@@ -177,7 +177,8 @@ impl OverseasStock<'_> {
             })
             .await?;
         let items: Vec<OverseasBalanceItem> = resp.field("output1")?;
-        let summary: Vec<OverseasBalanceSummary> = resp.field("output2")?;
+        // 해외 잔고 output2는 단일 객체(요약) — 국내(배열)와 다름.
+        let summary: OverseasBalanceSummary = resp.field("output2")?;
         Ok(resp.envelope((items, summary)))
     }
 
@@ -185,11 +186,11 @@ impl OverseasStock<'_> {
     pub async fn balance_all(
         &self,
         exchange: OverseasExchange,
-    ) -> Result<(Vec<OverseasBalanceItem>, Vec<OverseasBalanceSummary>)> {
+    ) -> Result<(Vec<OverseasBalanceItem>, OverseasBalanceSummary)> {
         let mut items = Vec::new();
-        let mut summary = Vec::new();
         let mut cursor: Option<(String, String)> = None;
-        loop {
+        // loop가 마지막 페이지 요약을 break 값으로 산출.
+        let summary = loop {
             let page = self
                 .balance(
                     exchange,
@@ -201,18 +202,13 @@ impl OverseasStock<'_> {
                 (Some(f), Some(n)) => Some((f, n)),
                 _ => None,
             };
-            let (mut it, mut su) = page.data;
+            let (mut it, su) = page.data;
             items.append(&mut it);
-            summary.append(&mut su);
-            if has_next {
-                match next_cursor {
-                    Some(next) => cursor = Some(next),
-                    None => break,
-                }
-            } else {
-                break;
+            match (has_next, next_cursor) {
+                (true, Some(next)) => cursor = Some(next),
+                _ => break su,
             }
-        }
+        };
         Ok((items, summary))
     }
 

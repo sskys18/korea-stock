@@ -81,6 +81,7 @@ pub struct KisConfig {
     pub account_product: String, // 상품코드 2자리 (예: "01")
     pub environment: Environment,
     pub token_cache_path: Option<PathBuf>, // 기본 ~/.kis/token.json
+    pub use_hashkey: bool,       // POST 주문 hashkey 선택 사용
 }
 
 // client.rs
@@ -92,7 +93,7 @@ pub struct KisClient {
 }
 
 impl KisClient {
-    pub async fn new(config: KisConfig) -> Result<Self>;
+    pub fn new(config: KisConfig) -> Result<Self>;
     pub fn domestic_stock(&self) -> DomesticStock<'_>;
     pub fn overseas_stock(&self) -> OverseasStock<'_>;
     pub fn futureoption(&self) -> FutureOption<'_>;
@@ -119,6 +120,7 @@ pub struct RawRequest {
     pub tr_id: String,
     pub tr_cont: Option<String>, // 연속조회
     pub params: serde_json::Value, // GET=query, POST=body
+    pub is_post: bool,
     pub needs_hashkey: bool,
 }
 ```

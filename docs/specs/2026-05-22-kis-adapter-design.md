@@ -132,8 +132,9 @@ pub struct RawRequest {
   캐시를 비활성화(메모리 토큰만 사용)하고 `tracing::warn` — 치명적 오류 아님.
   Windows는 `0600` 무시(NTFS ACL 미적용), 경고만.
 - 토큰 폐기: `POST /oauth2/revokeP` (선택, Drop 시 호출 안 함 — 명시적 호출만).
-- hashkey: 주문 등 POST 호출 시 `POST /uapi/hashkey`로 body 해시 발급 후 헤더에 첨부.
-  `needs_hashkey=true`인 요청에만 자동 수행.
+- hashkey: **KIS 어느 TR도 강제 아님** (공식 `kis_auth.py`가 "생략 가능" 명시). POST 주문 시
+  변조방지용 선택 기능 — `KisConfig.use_hashkey: bool`(기본 false). true면 POST 호출 전
+  `POST /uapi/hashkey`로 body 해시 발급 후 헤더 첨부.
 - 내부 `Mutex<TokenState>`로 동시 호출 시 토큰 1회만 발급 (이중 발급 방지).
 
 ### 3.4 레이트리밋 (ratelimit.rs)
@@ -144,10 +145,13 @@ pub struct RawRequest {
 
 ### 3.5 TR ID 분기 (trid.rs)
 
-- 다수 TR이 실전/모의에서 접두사만 다름 (`TTTC0802U` ↔ `VTTC0802U`).
+- 다수 TR이 실전/모의에서 접두사만 다름 (`T...U` ↔ `V...U`).
 - `fn resolve(real: &str, mock: &str, env: Environment) -> &str` 또는
   상수 쌍 테이블. 도메인 함수는 환경 모름 — `client`가 주입.
-- 모의 미지원 TR(일부 시세/해외): 호출 시 `KisError::UnsupportedInMock` 반환.
+- 정확한 tr_id는 `docs/kis-api/*.md`가 SSOT. 주의: order-cash는 신규 ID
+  매수 `TTTC0012U`/`VTTC0012U`, 매도 `TTTC0011U`/`VTTC0011U` (레거시 `TTTC080xU` 폐기).
+- **시세계 GET API는 실전/모의 tr_id 동일** (`FHK*`/`FHMIF*` 등) — resolve 시 동일값 쌍.
+- 모의 미지원 TR(해외 미체결 `TTTS3018R`, 모의 야간선물 등): `KisError::UnsupportedInMock` 반환.
 
 ### 3.6 도메인 모듈 패턴
 
@@ -182,9 +186,13 @@ impl DomesticStock<'_> {
 
 - `wss://ops.koreainvestment.com:21000` (실전) / `:31000` (모의).
 - `approval_key`: `POST /oauth2/Approval`로 발급 (access token과 별개).
+- `approval` 발급 요청 Body 필드명은 `secretkey` (REST 토큰 발급의 `appsecret`과 다름).
 - 구독: JSON 프레임 `{header:{tr_type:"1"}, body:{input:{tr_id, tr_key}}}`. 해지 `tr_type:"0"`.
-- 수신 데이터: 파이프(`|`) 구분 텍스트 → `decode.rs`가 tr_id별 필드 매핑.
-- 체결통보(H0STCNI0/H0STCNI9): 구독 응답에 AES key/iv 포함 → 이후 데이터 **AES256-CBC 복호화** 후 파싱.
+- 수신 데이터: **2단계 구분자** — 프레임 레벨 `|`(파이프), 실데이터 필드 `^`(캐럿).
+  `decode.rs`가 `|`로 분해 후 데이터부를 `^`로 분해해 tr_id별 필드 순서 매핑.
+- 체결통보(H0STCNI0 실전/H0STCNI9 모의): 구독 응답 `body.output.{key,iv}`에 AES key/iv 포함
+  → 이후 데이터 **AES-256-CBC 복호화**(PKCS#7 패딩, Base64 입력 → UTF-8) 후 파싱.
+  `tr_key`는 종목코드 아닌 HTS ID 사용.
 - API: `subscribe(kind, key) -> Result<SubscriptionHandle>`. `SubscriptionHandle`은
   `unsubscribe().await` 제공 + `Drop` 시 자동 해지 프레임 전송(best-effort).
   이벤트는 생성 시 받은 단일 `mpsc::Receiver<RealtimeEvent>`로 노출 — 이벤트에 `tr_id`+`tr_key` 포함되어 호출자가 분기.
@@ -236,7 +244,10 @@ dirs = "5"          # 토큰 캐시 경로
 ### 국내주식 (~12)
 주식주문(현금) 매수/매도, 주문정정, 주문취소, 정정취소가능주문조회,
 주식잔고조회, 매수가능조회, 주식일별주문체결조회,
-주식현재가시세, 현재가호가/예상체결, 주식일자별, 주식당일분봉, 주식현재가체결.
+주식현재가시세, 현재가호가/예상체결, 국내주식기간별시세, 주식당일분봉.
+※ 정정·취소는 동일 API `order-rvsecncl`(`TTTC0013U`) — `RVSE_CNCL_DVSN_CD`(01=정정/02=취소)로 분기.
+공개 메서드는 `revise`/`cancel` 2개로 노출하되 내부 1개 호출 공유.
+※ 일별주문체결조회 tr_id 2종: 3개월 이내 `TTTC0081R`, 이전 `CTSC9215R` — 조회기간으로 자동 선택.
 
 ### 해외주식 (~8)
 해외주식주문 매수/매도, 주문정정취소, 해외주식잔고, 해외주식미체결내역,
@@ -275,4 +286,7 @@ H0STCNI0/H0STCNI9 체결통보, HDFSCNT0 해외주식체결가.
 
 - KIS 모의투자는 일부 시세/해외 TR 미지원 → `UnsupportedInMock`으로 명시 차단, 표는 trid.rs에 유지.
 - 실시간 WebSocket 동시 구독 한도(약 41건) → 초과 시 `KisError::Ws` 반환.
-- KIS API 명세는 공식 GitHub 샘플(`koreainvestment/open-trading-api`) 기준으로 필드명 확정. 구현 단계에서 TR별 명세 재확인 필요.
+- **TR 명세 SSOT**: `docs/kis-api/{domestic-stock,overseas-stock,futureoption,realtime}.md`.
+  공식 GitHub 샘플(`koreainvestment/open-trading-api`)의 `chk_*.py` `COLUMN_MAPPING`에서 필드명 확정.
+  구현 시 struct 필드는 이 문서들을 그대로 따른다.
+- 잔여 `[미확인]` 필드(해외 잔고 output 귀속, 일부 모의 지원 여부)는 구현 중 모의 환경 실호출로 확정.

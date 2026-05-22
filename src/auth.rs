@@ -52,13 +52,13 @@ impl Auth {
                 return Ok(t.access_token.clone());
             }
         }
-        if state.is_none() {
-            if let Some(t) = self.load_cache().await {
-                if t.is_fresh() {
-                    let token = t.access_token.clone();
-                    *state = Some(t);
-                    return Ok(token);
-                }
+        // 메모리 토큰이 없거나 stale이면 파일 캐시 확인 — 다른 프로세스가
+        // 갱신해 둔 신선한 토큰을 stale 메모리 토큰 때문에 놓치지 않도록.
+        if let Some(t) = self.load_cache().await {
+            if t.is_fresh() {
+                let token = t.access_token.clone();
+                *state = Some(t);
+                return Ok(token);
             }
         }
         let fresh = self.issue().await?;

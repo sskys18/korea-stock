@@ -1144,6 +1144,13 @@ impl DomesticStock<'_> {
 주문 4종: 매수(TR1), 매도(TR2), 정정(TR3), 취소(TR4). 모두 POST.
 정정·취소는 동일 API `order-rvsecncl` — 내부 1개 함수 공유, 공개 `revise`/`cancel` 2개.
 
+> **hashkey 위험 `[Medium]`**: 공식 GitHub 샘플(`kis_auth.py`)은 hashkey를
+> "생략 가능"으로 명시 → 기본 `use_hashkey=false`. 단 `domestic-stock.md` §주의는
+> POST 주문에 hashkey "권장"이라 적음(추론). Plan 1 통합테스트(T14)는 **실주문을
+> 넣지 않으므로** 이 경로는 모의로 검증되지 않는다. 실제 주문 호출 시 `rt_cd≠0`
+> (특히 hashkey 관련 msg)면 `KisConfig.use_hashkey=true`로 재시도 — 이 분기를
+> README와 `domestic_order.rs` 주석에 명시할 것.
+
 ```rust
 use serde::Deserialize;
 
@@ -1157,29 +1164,18 @@ const TR_SELL: TrId = TrId::both("TTTC0011U", "VTTC0011U");
 const TR_RVSECNCL: TrId = TrId::both("TTTC0013U", "VTTC0013U");
 
 /// 주문 응답 (output). 매수/매도/정정/취소 공통.
+///
+/// 매수/매도 응답 키는 대문자(`KRX_FWDG_ORD_ORGNO`), 정정/취소 응답 키는
+/// 소문자(`krx_fwdg_ord_orgno`) — doc §1~4 확인. `#[serde(alias)]`로 양쪽 수용.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
 pub struct OrderResult {
     /// 한국거래소전송주문조직번호 — 정정/취소 시 사용.
-    pub krx_fwdg_ord_orgno: String,
-    /// 주문번호 — 정정/취소 시 사용.
-    pub odno: String,
-    /// 주문시각.
-    pub ord_tmd: String,
-}
-```
-
-> 주: 매수/매도 응답 키는 대문자(`KRX_FWDG_ORD_ORGNO`), 정정/취소 응답 키는
-> 소문자(`krx_fwdg_ord_orgno`) — doc §1~4 확인. `#[serde(alias)]`로 양쪽 수용:
-
-```rust
-// OrderResult 재정의 — 대/소문자 키 모두 수용
-#[derive(Debug, Clone, Deserialize)]
-pub struct OrderResult {
     #[serde(alias = "KRX_FWDG_ORD_ORGNO", alias = "krx_fwdg_ord_orgno")]
     pub krx_fwdg_ord_orgno: String,
+    /// 주문번호 — 정정/취소 시 사용.
     #[serde(alias = "ODNO", alias = "odno")]
     pub odno: String,
+    /// 주문시각.
     #[serde(alias = "ORD_TMD", alias = "ord_tmd")]
     pub ord_tmd: String,
 }
@@ -1333,17 +1329,19 @@ impl DomesticStock<'_> {
 모두 GET. TR5·6·8은 연속조회 지원 → envelope 반환 + `*_all` 헬퍼.
 
 ```rust
+use chrono::{Local, Months, NaiveDate};
 use serde::Deserialize;
 
 use crate::client::{ApiCall, KisResponse};
 use crate::domestic_stock::DomesticStock;
-use crate::error::Result;
+use crate::error::{KisError, Result};
 use crate::trid::TrId;
 
 const TR_PSBL_RVSECNCL: TrId = TrId::real_only("TTTC0084R"); // 모의 미확인 → real_only
 const TR_BALANCE: TrId = TrId::both("TTTC8434R", "VTTC8434R");
 const TR_PSBL_ORDER: TrId = TrId::both("TTTC8908R", "VTTC8908R");
-const TR_DAILY_CCLD: TrId = TrId::both("TTTC0081R", "VTTC0081R"); // 3개월 이내
+const TR_DAILY_CCLD_RECENT: TrId = TrId::both("TTTC0081R", "VTTC0081R"); // 3개월 이내
+const TR_DAILY_CCLD_OLD: TrId = TrId::both("CTSC9215R", "VTSC9215R"); // 3개월 이전
 
 /// 정정취소가능주문 1건 (TR5 output 배열 요소). 필드 전체는 §5 응답표.
 #[derive(Debug, Clone, Deserialize)]
@@ -1502,7 +1500,7 @@ impl DomesticStock<'_> {
         resp.field("output")
     }
 
-    /// 주식일별주문체결조회 (TR 8). 3개월 이내. 한 페이지.
+    /// 주식일별주문체결조회 (TR 8). 조회시작일 기준 3개월 이내/이전 tr_id 자동 선택.
     /// envelope의 `data`는 (체결내역, 합계).
     pub async fn daily_conclusions(
         &self,
@@ -1513,6 +1511,15 @@ impl DomesticStock<'_> {
     ) -> Result<KisResponse<(Vec<DailyConclusion>, DailyConclusionSummary)>> {
         let env = self.client.config().environment;
         let (fk, nk) = cursor.unwrap_or(("", ""));
+        // 조회시작일이 3개월 이전이면 CTSC9215R, 이내면 TTTC0081R.
+        let start_date = NaiveDate::parse_from_str(start, "%Y%m%d")
+            .map_err(|e| KisError::Decode(format!("invalid start date {start}: {e}")))?;
+        let cutoff = Local::now().date_naive() - Months::new(3);
+        let tr = if start_date >= cutoff {
+            TR_DAILY_CCLD_RECENT
+        } else {
+            TR_DAILY_CCLD_OLD
+        };
         let params = self.with_account(serde_json::json!({
             "INQR_STRT_DT": start,
             "INQR_END_DT": end,
@@ -1533,7 +1540,7 @@ impl DomesticStock<'_> {
             .call(ApiCall {
                 method: reqwest::Method::GET,
                 path: "/uapi/domestic-stock/v1/trading/inquire-daily-ccld".into(),
-                tr_id: TR_DAILY_CCLD.resolve(env)?.into(),
+                tr_id: tr.resolve(env)?.into(),
                 tr_cont: cursor.map(|_| "N".to_string()),
                 params,
                 is_post: false,

@@ -7,7 +7,7 @@ description = "한국투자증권(KIS) OpenAPI Rust 어댑터"
 license = "MIT"
 
 [dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "signal"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -15,9 +15,14 @@ thiserror = "1"
 chrono = { version = "0.4", features = ["serde", "clock"] }
 tracing = "0.1"
 dirs = "5"
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc", "block-padding"] }
+base64 = "0.22"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "signal"] }
 tracing-subscriber = "0.3"
 
 [[example]]
@@ -31,3 +36,6 @@ name = "overseas_quote"
 
 [[example]]
 name = "futureoption_quote"
+
+[[example]]
+name = "realtime_feed"

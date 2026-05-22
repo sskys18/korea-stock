@@ -142,6 +142,14 @@ impl KisClient {
         crate::futureoption::FutureOption::new(self)
     }
 
+    /// 실시간 WebSocket 클라이언트 생성.
+    ///
+    /// approval_key 발급(REST) + WS 연결을 수행하므로 비동기·실패 가능.
+    /// 반환된 `RealtimeClient`는 독립 — `KisClient` 수명과 무관.
+    pub async fn realtime(&self) -> Result<crate::realtime::RealtimeClient> {
+        crate::realtime::RealtimeClient::connect(self.config.clone(), self.http.clone()).await
+    }
+
     /// 미구현 TR 직접 호출. 응답은 raw JSON envelope.
     pub async fn raw_call(&self, req: RawRequest) -> Result<KisResponse<Value>> {
         let resp = self

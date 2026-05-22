@@ -2,14 +2,13 @@
 
 한국투자증권(KIS) OpenAPI Rust 어댑터.
 
-## 현재 범위 (Plan 1 + 2)
+## 현재 범위 (Plan 1 + 2 + 3)
 
 - 국내주식 12개 TR — 시세·주문·계좌·체결
 - 해외주식 8개 TR — 현재가·기간시세·매수/매도/정정취소·잔고·미체결·체결내역
 - 국내선물옵션 7개 TR — 현재가·호가·주문/정정취소·잔고·체결내역·매수가능
+- 실시간 WebSocket 4종 — 국내체결가·국내호가·체결통보·해외체결가
 - 실전/모의투자 환경, 토큰 자동 발급·캐싱, 레이트리밋, 연속조회
-
-실시간 WebSocket은 Plan 3에서 추가.
 
 ## 사용법
 
@@ -45,6 +44,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 기본값은 `KisConfig.use_hashkey = false`다. 실제 주문 호출에서 KIS가 hashkey
 관련 오류를 반환하면 설정을 `true`로 바꿔 재시도한다.
+
+## 실시간 WebSocket (Plan 3)
+
+```rust
+use kis_adapter::{KisClient, KisConfig, RealtimeEvent, SubscriptionKind};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = KisClient::new(KisConfig::from_env()?)?;
+    let mut rt = client.realtime().await?;
+    let mut events = rt.take_events().unwrap();
+    let _h = rt.subscribe(SubscriptionKind::DomesticTrade, "005930").await?;
+    while let Some(ev) = events.recv().await {
+        if let RealtimeEvent::DomesticTrade { tr_key, data, .. } = ev {
+            println!("{tr_key} {}", data.stck_prpr);
+        }
+    }
+    Ok(())
+}
+```
+
+- 지원 tr_id: H0STCNT0(국내체결가), H0STASP0(국내호가),
+  H0STCNI0/H0STCNI9(체결통보 실전/모의), HDFSCNT0(해외체결가).
+- 체결통보는 AES-256-CBC 복호화 자동 처리. `tr_key`는 HTS ID 사용.
+- `SubscriptionHandle` drop 시 자동 해지. 동시 구독 한도 약 41건.
+- 연결 끊김 시 자동 재연결·재구독 — `RealtimeEvent::Reconnecting/Reconnected` 통지.
 
 ## 라이선스
 

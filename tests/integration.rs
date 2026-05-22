@@ -56,3 +56,33 @@ async fn futureoption_current_price() {
         .expect("futureoption current price call");
     assert!(raw.get("output1").is_some() || !price.futs_prpr.is_empty());
 }
+
+#[tokio::test]
+#[ignore = "requires KIS_* credentials + market hours"]
+async fn realtime_subscribe_one() {
+    use kis_adapter::{RealtimeEvent, SubscriptionKind};
+
+    let config = KisConfig::from_env().expect("KIS_* env vars");
+    let client = KisClient::new(config).expect("client");
+    let mut rt = client.realtime().await.expect("realtime connect");
+    let mut events = rt.take_events().expect("events");
+
+    let _handle = rt
+        .subscribe(SubscriptionKind::DomesticTrade, "005930")
+        .await
+        .expect("subscribe");
+
+    let got = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            match events.recv().await {
+                Some(RealtimeEvent::DomesticTrade { .. }) => return true,
+                Some(_) => continue,
+                None => return false,
+            }
+        }
+    })
+    .await;
+    if let Ok(false) = got {
+        panic!("event channel closed unexpectedly");
+    }
+}

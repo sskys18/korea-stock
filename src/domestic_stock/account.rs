@@ -13,7 +13,8 @@ const TR_DAILY_CCLD_RECENT: TrId = TrId::both("TTTC0081R", "VTTC0081R");
 const TR_DAILY_CCLD_OLD: TrId = TrId::both("CTSC9215R", "VTSC9215R");
 
 /// 정정취소가능주문 1건 (TR5 output 배열 요소). 필드 전체는 §5 응답표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct RevisableOrder {
     pub ord_gno_brno: String,
     pub odno: String,
@@ -39,7 +40,8 @@ pub struct RevisableOrder {
 }
 
 /// 보유종목 1건 (TR6 output1 요소). 필드 전체는 §6 output1 표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct BalanceItem {
     pub pdno: String,
     pub prdt_name: String,
@@ -70,7 +72,8 @@ pub struct BalanceItem {
 }
 
 /// 계좌 요약 (TR6 output2). 필드 전체는 §6 output2 표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct BalanceSummary {
     pub dnca_tot_amt: String,
     pub nxdy_excc_amt: String,
@@ -99,7 +102,8 @@ pub struct BalanceSummary {
 }
 
 /// 매수가능 정보 (TR7 output). 필드 전체는 §7 응답표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct BuyableInfo {
     pub ord_psbl_cash: String,
     pub ord_psbl_sbst: String,
@@ -116,7 +120,8 @@ pub struct BuyableInfo {
 }
 
 /// 주문체결 1건 (TR8 output1 요소). 필드 전체는 §8 output1 표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct DailyConclusion {
     pub ord_dt: String,
     pub ord_gno_brno: String,
@@ -157,7 +162,8 @@ pub struct DailyConclusion {
 }
 
 /// 주문체결 합계 (TR8 output2). 필드 전체는 §8 output2 표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct DailyConclusionSummary {
     pub tot_ord_qty: String,
     pub tot_ccld_qty: String,

@@ -8,7 +8,8 @@ use crate::trid::TrId;
 const TR_PRICE: TrId = TrId::same("FHKST01010100");
 
 /// 주식현재가 시세 응답. 필드 전체는 docs/kis-api/domestic-stock.md §9.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct CurrentPrice {
     pub iscd_stat_cls_code: String,
     pub marg_rate: String,
@@ -104,7 +105,8 @@ impl CurrentPrice {
 const TR_ASKING: TrId = TrId::same("FHKST01010200");
 
 /// 호가 정보 (output1). 필드 전체는 §10 output1 표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct AskingPrice {
     pub aspr_acpt_hour: String,
     pub askp1: String,
@@ -181,7 +183,8 @@ pub struct AskingPrice {
 }
 
 /// 예상체결 정보 (output2). 필드 전체는 §10 output2 표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct ExpectedConclusion {
     pub antc_cnpr: String,
     pub antc_cntg_vrss_sign: String,
@@ -200,7 +203,8 @@ pub struct ExpectedConclusion {
 const TR_PERIOD: TrId = TrId::same("FHKST03010100");
 
 /// 기간별시세 종목 요약 (output1). 필드 전체는 §11 output1 표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct PeriodSummary {
     pub prdy_vrss: String,
     pub prdy_vrss_sign: String,
@@ -235,7 +239,8 @@ pub struct PeriodSummary {
 }
 
 /// 기간별 봉 1건 (output2 배열 요소). 필드 전체는 §11 output2 표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct PeriodCandle {
     pub stck_bsop_date: String,
     pub stck_clpr: String,
@@ -275,7 +280,8 @@ impl Period {
 const TR_MINUTE: TrId = TrId::same("FHKST03010200");
 
 /// 분봉 종목 요약 (output1). 필드 전체는 §12 output1 표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct MinuteSummary {
     pub prdy_vrss: String,
     pub prdy_vrss_sign: String,
@@ -288,7 +294,8 @@ pub struct MinuteSummary {
 }
 
 /// 분봉 1건 (output2 배열 요소). 필드 전체는 §12 output2 표.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct MinuteCandle {
     pub stck_bsop_date: String,
     pub stck_cntg_hour: String,

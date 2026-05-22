@@ -148,8 +148,33 @@ impl KisClient {
         Ok(resp.envelope(data))
     }
 
-    /// 도메인 모듈 공용 호출. 레이트리밋 → 토큰 → 헤더 → 전송 → rt_cd 검사.
+    /// 도메인 모듈 공용 호출. EGW00201(초당 거래건수 초과) 시 지수 백오프 재시도.
     pub(crate) async fn call(&self, c: ApiCall) -> Result<RawResponse> {
+        const MAX_RETRIES: u32 = 4;
+        let mut attempt = 0;
+        loop {
+            match self.call_once(&c).await {
+                Err(KisError::Api { msg_cd, .. })
+                    if msg_cd == "EGW00201" && attempt < MAX_RETRIES =>
+                {
+                    let backoff =
+                        std::time::Duration::from_millis(200u64 << attempt);
+                    tracing::warn!(
+                        "EGW00201 rate limit — retry {}/{} after {:?}",
+                        attempt + 1,
+                        MAX_RETRIES,
+                        backoff
+                    );
+                    tokio::time::sleep(backoff).await;
+                    attempt += 1;
+                }
+                other => return other,
+            }
+        }
+    }
+
+    /// 단일 호출. 레이트리밋 → 토큰 → 헤더 → 전송 → rt_cd 검사.
+    async fn call_once(&self, c: &ApiCall) -> Result<RawResponse> {
         self.limiter.acquire().await;
         let token = self.auth.token().await?;
         let url = format!("{}{}", self.config.environment.rest_base(), c.path);

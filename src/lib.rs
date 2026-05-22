@@ -8,6 +8,8 @@ mod ratelimit;
 mod trid;
 
 pub mod domestic_stock;
+pub mod futureoption;
+pub mod overseas_stock;
 
 pub use client::{KisClient, KisResponse, RawRequest};
 pub use config::{Environment, KisConfig};

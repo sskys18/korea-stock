@@ -73,13 +73,14 @@ impl RawResponse {
     }
 
     /// `data`를 envelope로 감싼다. ctx_area는 body에서 추출.
+    /// 국내주식은 `*100` 체계, 해외·선물옵션은 `*200` 체계 — 둘 다 수용(100 우선, 없으면 200).
     pub fn envelope<T>(&self, data: T) -> KisResponse<T> {
         let s = |k: &str| self.body.get(k).and_then(|v| v.as_str()).map(String::from);
         KisResponse {
             data,
             tr_cont: self.tr_cont.clone(),
-            ctx_area_fk: s("ctx_area_fk100"),
-            ctx_area_nk: s("ctx_area_nk100"),
+            ctx_area_fk: s("ctx_area_fk100").or_else(|| s("ctx_area_fk200")),
+            ctx_area_nk: s("ctx_area_nk100").or_else(|| s("ctx_area_nk200")),
             rt_cd: s("rt_cd").unwrap_or_default(),
             msg_cd: s("msg_cd").unwrap_or_default(),
             msg: s("msg1").unwrap_or_default(),
@@ -131,6 +132,16 @@ impl KisClient {
         crate::domestic_stock::DomesticStock::new(self)
     }
 
+    /// 해외주식 도메인 액세서.
+    pub fn overseas_stock(&self) -> crate::overseas_stock::OverseasStock<'_> {
+        crate::overseas_stock::OverseasStock::new(self)
+    }
+
+    /// 국내선물옵션 도메인 액세서.
+    pub fn futureoption(&self) -> crate::futureoption::FutureOption<'_> {
+        crate::futureoption::FutureOption::new(self)
+    }
+
     /// 미구현 TR 직접 호출. 응답은 raw JSON envelope.
     pub async fn raw_call(&self, req: RawRequest) -> Result<KisResponse<Value>> {
         let resp = self
@@ -157,8 +168,7 @@ impl KisClient {
                 Err(KisError::Api { msg_cd, .. })
                     if msg_cd == "EGW00201" && attempt < MAX_RETRIES =>
                 {
-                    let backoff =
-                        std::time::Duration::from_millis(200u64 << attempt);
+                    let backoff = std::time::Duration::from_millis(200u64 << attempt);
                     tracing::warn!(
                         "EGW00201 rate limit — retry {}/{} after {:?}",
                         attempt + 1,

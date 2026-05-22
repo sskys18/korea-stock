@@ -25,3 +25,9 @@ name = "domestic_quote"
 
 [[example]]
 name = "domestic_order"
+
+[[example]]
+name = "overseas_quote"
+
+[[example]]
+name = "futureoption_quote"

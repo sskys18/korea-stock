@@ -30,3 +30,29 @@ async fn balance_query() {
     let (_items, summary) = ds.balance_all().await.expect("balance call");
     assert!(!summary.is_empty(), "계좌 요약 1건 이상");
 }
+
+// ── Plan 2: 해외주식·선물옵션 스모크 ──────────────────────────────────
+
+#[tokio::test]
+#[ignore = "requires KIS_* credentials"]
+async fn overseas_current_price() {
+    let client = client().expect("KIS_* env vars");
+    let os = client.overseas_stock();
+    let price = os
+        .current_price(kis_adapter::overseas_stock::OverseasExchange::Nasd, "AAPL")
+        .await
+        .expect("overseas current price call");
+    assert!(!price.last.is_empty(), "현재가 비어있지 않음");
+}
+
+#[tokio::test]
+#[ignore = "requires KIS_* credentials"]
+async fn futureoption_current_price() {
+    let client = client().expect("KIS_* env vars");
+    let fo = client.futureoption();
+    let (price, raw) = fo
+        .current_price(kis_adapter::futureoption::MarketDiv::IndexFuture, "101W09")
+        .await
+        .expect("futureoption current price call");
+    assert!(raw.get("output1").is_some() || !price.futs_prpr.is_empty());
+}

@@ -1,7 +1,7 @@
 # KIS Adapter — 한국투자증권 OpenAPI Rust 어댑터 설계
 
 - 작성일: 2026-05-22
-- 상태: 승인 대기
+- 상태: 구현 완료 (Plan 1~3 main 머지). 구현 세부는 `docs/plans/`·소스 참조.
 
 ## 1. 목적
 

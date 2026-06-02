@@ -212,13 +212,11 @@ impl TossClient {
             .and_then(|v| v.to_str().ok())
             .map(String::from);
 
-        // 429: 권위 throttle. Retry-After(초) → X-RateLimit-Reset(초) 순으로 대기.
+        // 429: 권위 throttle. Retry-After → X-RateLimit-Reset(초) 순으로 대기.
         if status == StatusCode::TOO_MANY_REQUESTS {
-            let wait_secs = header_u64(&resp, "retry-after")
-                .or_else(|| header_u64(&resp, "x-ratelimit-reset"))
-                .unwrap_or(1);
-            tracing::warn!("429 — server Retry-After {wait_secs}s");
-            tokio::time::sleep(Duration::from_secs(wait_secs.max(1))).await;
+            let wait_secs = retry_after_secs(&resp);
+            tracing::warn!("429 — {wait_secs}s 대기 후 재시도");
+            tokio::time::sleep(Duration::from_secs(wait_secs)).await;
             return Err(TossError::Api {
                 status: 429,
                 request_id,
@@ -273,7 +271,34 @@ pub(crate) fn map_bff_error(
     }
 }
 
-/// 응답 헤더에서 u64 값을 읽는다 (Retry-After 등).
+/// 429 대기 시간(초)을 응답 헤더에서 산출한다.
+///
+/// `Retry-After`는 RFC 7231상 ①delta-seconds(정수) 또는 ②HTTP-date 두 형식을 가진다.
+/// 정수 우선 파싱, 실패 시 RFC2822 날짜로 파싱해 현재시각과의 차(초)로 환산한다 —
+/// 정수만 받던 기존 구현은 날짜 형식을 만나면 조용히 1초로 떨어져 과소 대기했다.
+/// 둘 다 실패하면 `X-RateLimit-Reset`(초) → 기본 1초 순. 최종값은 [1, 300]초로 클램프.
+fn retry_after_secs(resp: &reqwest::Response) -> u64 {
+    if let Some(raw) = resp
+        .headers()
+        .get("retry-after")
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+    {
+        if let Ok(secs) = raw.parse::<u64>() {
+            return secs.clamp(1, 300);
+        }
+        if let Ok(when) = chrono::DateTime::parse_from_rfc2822(raw) {
+            let delta = when.timestamp() - chrono::Utc::now().timestamp();
+            return delta.clamp(1, 300) as u64;
+        }
+        tracing::warn!("Retry-After 파싱 실패('{raw}') — 폴백 대기 적용");
+    }
+    header_u64(resp, "x-ratelimit-reset")
+        .unwrap_or(1)
+        .clamp(1, 300)
+}
+
+/// 응답 헤더에서 u64 값을 읽는다 (X-RateLimit-Reset 등).
 fn header_u64(resp: &reqwest::Response, name: &str) -> Option<u64> {
     resp.headers()
         .get(name)

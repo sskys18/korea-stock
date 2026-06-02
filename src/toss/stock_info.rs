@@ -83,7 +83,7 @@ impl<'a> StockInfoApi<'a> {
         Self { client }
     }
 
-    /// 종목 기본 정보 조회. 복수 심볼 (콤마 결합은 내부 처리).
+    /// 종목 기본 정보 조회. 최대 200개 심볼. (콤마 결합은 내부 처리.)
     pub async fn stocks(&self, symbols: &[&str]) -> Result<Vec<StockInfo>> {
         self.client
             .call(ApiCall {

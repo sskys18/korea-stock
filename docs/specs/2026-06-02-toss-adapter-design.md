@@ -164,7 +164,7 @@ impl TossClient {
     pub fn asset(&self, account_seq: i64) -> Asset<'_>;
     pub fn order(&self, account_seq: i64) -> Order<'_>;
     pub fn order_info(&self, account_seq: i64) -> OrderInfo<'_>;
-    pub async fn raw_call(&self, req: RawRequest) -> Result<serde_json::Value>;
+    pub async fn raw_call(&self, req: RawRequest) -> Result<TossResponse<serde_json::Value>>;
 }
 ```
 

@@ -1,7 +1,7 @@
 //! 모의투자 환경 통합 스모크 테스트.
 //! 실행: KIS_* 환경변수 설정 후 `cargo test --test integration -- --ignored`
 
-use kis_adapter::{Exchange, KisClient, KisConfig, Market};
+use kis_adapter::{Exchange, KisClient, KisConfig, Market, RankBy};
 
 fn client() -> Option<KisClient> {
     let config = KisConfig::from_env().ok()?;
@@ -415,4 +415,28 @@ async fn live_order_unfilled_cycle() {
     };
     eprintln!("CANCEL: odno={}", cancel.odno);
     assert!(!cancel.odno.is_empty(), "취소 주문번호");
+}
+
+#[tokio::test]
+#[ignore = "requires KIS_* credentials"]
+async fn domestic_volume_rank_unified() {
+    let client = client().expect("KIS_* env vars");
+    // 거래대금순 + 통합(KRX+NXT) — 순환매 레이더 스캐너.
+    let rows = client
+        .domestic_stock()
+        .volume_rank(Market::Unified, RankBy::TradingAmount)
+        .await;
+    match rows {
+        Ok(items) => {
+            eprintln!("VOLUME_RANK(UN, 거래대금순): {} rows", items.len());
+            if let Some(top) = items.first() {
+                eprintln!(
+                    "  #1 {} {} 거래대금={}",
+                    top.mksc_shrn_iscd, top.hts_kor_isnm, top.acml_tr_pbmn
+                );
+                assert!(!top.mksc_shrn_iscd.is_empty(), "종목코드 비어있지 않음");
+            }
+        }
+        Err(e) => assert_wire_ok::<()>(Err(e), "volume_rank"),
+    }
 }

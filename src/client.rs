@@ -110,7 +110,10 @@ pub struct KisClient {
 impl KisClient {
     /// 클라이언트 생성. 토큰은 첫 호출 시 lazy 발급.
     pub fn new(config: KisConfig) -> Result<Self> {
+        // 코어 TLS는 rustls 고정 — `external` feature가 reqwest/native-tls를
+        // 더해도 코어 클라이언트 백엔드가 바뀌지 않도록(feature 통합 방어).
         let http = reqwest::Client::builder()
+            .use_rustls_tls()
             .timeout(std::time::Duration::from_secs(10))
             .build()?;
         let auth = Auth::new(&config, http.clone());

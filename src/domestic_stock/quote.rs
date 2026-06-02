@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 use crate::client::ApiCall;
-use crate::domestic_stock::DomesticStock;
+use crate::domestic_stock::{DomesticStock, Market};
 use crate::error::Result;
 use crate::trid::TrId;
 
@@ -308,8 +308,8 @@ pub struct MinuteCandle {
 }
 
 impl DomesticStock<'_> {
-    /// 주식현재가 시세 (TR 9). `market`: J=KRX, NX=NXT, UN=통합.
-    pub async fn current_price(&self, stock_code: &str) -> Result<CurrentPrice> {
+    /// 주식현재가 시세 (TR 9). `market` KRX/NXT/통합 선택.
+    pub async fn current_price(&self, stock_code: &str, market: Market) -> Result<CurrentPrice> {
         let env = self.client.config().environment;
         let resp = self
             .client
@@ -319,7 +319,7 @@ impl DomesticStock<'_> {
                 tr_id: TR_PRICE.resolve(env)?.into(),
                 tr_cont: None,
                 params: serde_json::json!({
-                    "FID_COND_MRKT_DIV_CODE": "J",
+                    "FID_COND_MRKT_DIV_CODE": market.fid_code(),
                     "FID_INPUT_ISCD": stock_code,
                 }),
                 is_post: false,
@@ -333,6 +333,7 @@ impl DomesticStock<'_> {
     pub async fn asking_price(
         &self,
         stock_code: &str,
+        market: Market,
     ) -> Result<(AskingPrice, ExpectedConclusion)> {
         let env = self.client.config().environment;
         let resp = self
@@ -343,7 +344,7 @@ impl DomesticStock<'_> {
                 tr_id: TR_ASKING.resolve(env)?.into(),
                 tr_cont: None,
                 params: serde_json::json!({
-                    "FID_COND_MRKT_DIV_CODE": "J",
+                    "FID_COND_MRKT_DIV_CODE": market.fid_code(),
                     "FID_INPUT_ISCD": stock_code,
                 }),
                 is_post: false,
@@ -361,6 +362,7 @@ impl DomesticStock<'_> {
         end: &str,
         period: Period,
         adjusted: bool,
+        market: Market,
     ) -> Result<(PeriodSummary, Vec<PeriodCandle>)> {
         let env = self.client.config().environment;
         let resp = self
@@ -371,7 +373,7 @@ impl DomesticStock<'_> {
                 tr_id: TR_PERIOD.resolve(env)?.into(),
                 tr_cont: None,
                 params: serde_json::json!({
-                    "FID_COND_MRKT_DIV_CODE": "J",
+                    "FID_COND_MRKT_DIV_CODE": market.fid_code(),
                     "FID_INPUT_ISCD": stock_code,
                     "FID_INPUT_DATE_1": start,
                     "FID_INPUT_DATE_2": end,
@@ -391,6 +393,7 @@ impl DomesticStock<'_> {
         stock_code: &str,
         time: &str,
         include_past: bool,
+        market: Market,
     ) -> Result<(MinuteSummary, Vec<MinuteCandle>)> {
         let env = self.client.config().environment;
         let resp = self
@@ -401,7 +404,7 @@ impl DomesticStock<'_> {
                 tr_id: TR_MINUTE.resolve(env)?.into(),
                 tr_cont: None,
                 params: serde_json::json!({
-                    "FID_COND_MRKT_DIV_CODE": "J",
+                    "FID_COND_MRKT_DIV_CODE": market.fid_code(),
                     "FID_INPUT_ISCD": stock_code,
                     "FID_INPUT_HOUR_1": time,
                     "FID_PW_DATA_INCU_YN": if include_past { "Y" } else { "N" },

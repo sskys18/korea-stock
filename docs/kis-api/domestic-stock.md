@@ -736,9 +736,83 @@
 
 ---
 
+## 13. 종목별 투자자매매동향(일별) — 알파 플로우
+
+| 항목 | 내용 |
+|---|---|
+| API명 | 종목별 투자자매매동향(일별) / Investor Trade By Stock Daily |
+| HTTP | `GET /uapi/domestic-stock/v1/quotations/investor-trade-by-stock-daily` |
+| tr_id | `FHPTJ04160001` (실전·모의 동일 가정) |
+| 연속조회 | 지원 — 헤더 `tr_cont` `M`/`F`면 다음 페이지(ctx_area 없는 헤더 전용). 어댑터 `investor_trend_daily_all`이 수집. |
+| 출처 | open-trading-api `examples_llm/domestic_stock/investor_trade_by_stock_daily` |
+
+### 요청 필드 (Query)
+
+| 이름 | 필수 | 설명 |
+|---|---|---|
+| FID_COND_MRKT_DIV_CODE | Y | J:KRX, NX:NXT, UN:통합 |
+| FID_INPUT_ISCD | Y | 종목코드 6자리 |
+| FID_INPUT_DATE_1 | Y | 기준일 YYYYMMDD |
+| FID_ORG_ADJ_PRC | Y | 공란 |
+| FID_ETC_CLS_CODE | Y | 공란 |
+
+### 응답 필드 (`output1` 요약 / `output2` 일별 배열)
+
+핵심: `stck_bsop_date`, `stck_clpr`, `frgn_ntby_qty`(외국인 순매수량), `prsn_ntby_qty`(개인),
+`orgn_ntby_qty`(기관계), 각 `*_ntby_tr_pbmn`(순매수 대금), 세분류
+`scrt`/`ivtr`/`pe_fund`/`bank`/`insu`/`fund`/`etc_corp` 순매수. 전체 매핑은 샘플 `chk_*.py`
+COLUMN_MAPPING(110+ 필드) 참조. 어댑터는 알파 핵심 필드만 타입화(`#[serde(default)]`).
+
+## 14. 종목별 외국인·기관 추정 가집계
+
+| 항목 | 내용 |
+|---|---|
+| API명 | 종목별 외국인기관 추정가집계 / Investor Trend Estimate |
+| HTTP | `GET /uapi/domestic-stock/v1/quotations/investor-trend-estimate` |
+| tr_id | `HHPTJ04160200` |
+| 요청 | `MKSC_SHRN_ISCD`(종목코드) 단일 |
+| 응답 | **`output2`** 배열: `bsop_hour_gb`(입력구분), `frgn_fake_ntby_qty`(외국인 가집계), `orgn_fake_ntby_qty`(기관 가집계), `sum_fake_ntby_qty`(합산 가집계) |
+| 비고 | 장중 확정 전 추정치. 실시간 플로우 신호. |
+
+## 15. 프로그램매매 종합현황(시간)
+
+| 항목 | 내용 |
+|---|---|
+| HTTP | `GET /uapi/domestic-stock/v1/quotations/comp-program-trade-today` |
+| tr_id | `FHPPG04600101` |
+| 요청 | `FID_COND_MRKT_DIV_CODE`(J), `FID_MRKT_CLS_CODE`(K:코스피/Q:코스닥, 필수), `FID_SCTN_CLS_CODE`, `FID_INPUT_ISCD`, `FID_COND_MRKT_DIV_CODE1`, `FID_INPUT_HOUR_1` (뒤 4개 공란 허용) |
+| 응답 | `output` 배열: `whol_smtn_ntby_qty`(전체합계 프로그램 순매수량), `whol_smtn_ntby_tr_pbmn`(순매수 대금), `whol_ntby_vol_icdc`(순매수 증감) 등 15필드 |
+| 비고 | 최근 30분, 다음조회 불가. **시장 단위**(종목코드 선택). |
+
+## 16. 프로그램매매 종합현황(일별)
+
+| 항목 | 내용 |
+|---|---|
+| HTTP | `GET /uapi/domestic-stock/v1/quotations/comp-program-trade-daily` |
+| tr_id | `FHPPG04600001` |
+| 요청 | `FID_COND_MRKT_DIV_CODE`(J), `FID_MRKT_CLS_CODE`(K/Q), `FID_INPUT_DATE_1`, `FID_INPUT_DATE_2` |
+| 응답 | `output` 배열: 차익(`arbt_*`)·비차익(`nabt_*`) 합계 순매수 수량/대금 — `arbt_smtm_ntby_qty`, `nabt_smtn_ntby_qty`, `whol_entm_ntby_qty` 등 70필드(비율 포함). 어댑터는 차익/비차익 순매수 핵심만 타입화. |
+
+## 17. 일별 공매도
+
+| 항목 | 내용 |
+|---|---|
+| HTTP | `GET /uapi/domestic-stock/v1/quotations/daily-short-sale` |
+| tr_id | `FHPST04830000` |
+| 요청 | `FID_COND_MRKT_DIV_CODE`(J), `FID_INPUT_ISCD`, `FID_INPUT_DATE_1`(시작), `FID_INPUT_DATE_2`(종료) YYYYMMDD |
+| 응답 | `output1`(요약 object) + `output2`(일별 배열): `stck_bsop_date`, `ssts_cntg_qty`(공매도 체결수량), `ssts_vol_rlim`(거래량 비중), `acml_ssts_cntg_qty`(누적), `ssts_tr_pbmn`(거래대금), `avrg_prc`(평균가) 등 |
+| 비고 | 공매도 **거래**(체결) 신호. **잔고**(outstanding)는 KIS 미제공 — KRX MDC `MDCSTAT30502` 외부 조회(`feature=external`). |
+
+> TR 13~17은 codex spec-review/구현 중 공식 GitHub 샘플 대조로 검증(2026-06-02). 프롬프트 원안의
+> `FHKST01010900`(주식현재가 투자자)·`FHPTJ04400000`(foreign-institution-total 랭킹) 오인을 정정.
+> 응답 struct는 컴파일·`#[serde(default)]` 내성만 보장 — 실사용 시 런타임 와이어 검증 필요.
+
+---
+
 ## 수집 결과 요약
 
 - **완전수집: 11개** — TR 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12 (path·tr_id 실전/모의 쌍·요청 필드·응답 필드 모두 우선순위 1 소스에서 확인).
+- **알파 플로우 추가: 4개** — TR 13~16 (path·tr_id·요청 필드·output 슬롯 샘플 확인. 응답 struct는 핵심 필드만 타입화, 와이어 미검증).
 - **부분수집: 1개** — TR 5 (주식정정취소가능주문조회): 요청/응답 필드는 완전 확인. 단 모의투자 tr_id가 GitHub 샘플에 분기 없이 `TTTC0084R` 단일이라 모의 지원 여부 `[미확인]`.
 - **실패: 0개**.
 

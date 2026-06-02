@@ -5,13 +5,26 @@
 
 use tokio::sync::mpsc;
 
-/// 구독 가능한 실시간 데이터 종류. 본 Plan 지원 4종.
+use crate::domestic_stock::Market;
+
+/// 구독 가능한 실시간 데이터 종류.
+///
+/// 국내주식 6종 스트림은 `Market`(KRX/NXT/통합)로 거래소를 선택 — tr_id는
+/// `H0{infix}{suffix}0` 형태로 합성된다(예: NXT 호가 `H0NXASP0`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SubscriptionKind {
-    /// H0STCNT0 — 국내주식 실시간체결가. tr_key=종목코드.
-    DomesticTrade,
-    /// H0STASP0 — 국내주식 실시간호가. tr_key=종목코드.
-    DomesticAsking,
+    /// 실시간체결가 (H0{ST,NX,UN}CNT0). tr_key=종목코드.
+    DomesticTrade(Market),
+    /// 실시간호가 (H0{ST,NX,UN}ASP0). tr_key=종목코드.
+    DomesticAsking(Market),
+    /// 실시간예상체결 (H0{ST,NX,UN}ANC0). tr_key=종목코드.
+    ExpectedConclusion(Market),
+    /// 실시간장운영 (H0{ST,NX,UN}MKO0). tr_key=종목코드.
+    MarketOperation(Market),
+    /// 실시간회원사 (H0{ST,NX,UN}MBC0). tr_key=종목코드.
+    MemberTrade(Market),
+    /// 실시간프로그램매매 (H0{ST,NX,UN}PGM0). tr_key=종목코드.
+    ProgramTrade(Market),
     /// H0STCNI0(실전)/H0STCNI9(모의) — 체결통보. tr_key=HTS ID.
     OrderNotice,
     /// HDFSCNT0 — 해외주식 실시간체결가. tr_key=실시간종목코드.
@@ -19,15 +32,24 @@ pub enum SubscriptionKind {
 }
 
 impl SubscriptionKind {
-    /// 환경별 tr_id. OrderNotice만 실전/모의가 다름.
-    pub(crate) fn tr_id(self, env: crate::config::Environment) -> &'static str {
+    /// 환경별 tr_id. 국내 6종은 `Market`별 합성, OrderNotice만 실전/모의가 다름.
+    pub(crate) fn tr_id(self, env: crate::config::Environment) -> String {
         use crate::config::Environment::*;
-        match (self, env) {
-            (SubscriptionKind::DomesticTrade, _) => "H0STCNT0",
-            (SubscriptionKind::DomesticAsking, _) => "H0STASP0",
-            (SubscriptionKind::OrderNotice, Real) => "H0STCNI0",
-            (SubscriptionKind::OrderNotice, Mock) => "H0STCNI9",
-            (SubscriptionKind::OverseasTrade, _) => "HDFSCNT0",
+        use SubscriptionKind::*;
+        let domestic = |m: Market, suffix: &str| format!("H0{}{suffix}0", m.ws_infix());
+        match self {
+            DomesticTrade(m) => domestic(m, "CNT"),
+            DomesticAsking(m) => domestic(m, "ASP"),
+            ExpectedConclusion(m) => domestic(m, "ANC"),
+            MarketOperation(m) => domestic(m, "MKO"),
+            MemberTrade(m) => domestic(m, "MBC"),
+            ProgramTrade(m) => domestic(m, "PGM"),
+            OrderNotice => match env {
+                Real => "H0STCNI0",
+                Mock => "H0STCNI9",
+            }
+            .to_string(),
+            OverseasTrade => "HDFSCNT0".to_string(),
         }
     }
 
@@ -128,6 +150,27 @@ mod tests {
             SubscriptionKind::OrderNotice.tr_id(Environment::Mock),
             "H0STCNI9"
         );
+    }
+
+    #[test]
+    fn tr_id_synthesis_per_market() {
+        use crate::config::Environment::Real;
+        assert_eq!(SubscriptionKind::DomesticTrade(Market::Krx).tr_id(Real), "H0STCNT0");
+        assert_eq!(SubscriptionKind::DomesticTrade(Market::Nxt).tr_id(Real), "H0NXCNT0");
+        assert_eq!(
+            SubscriptionKind::DomesticAsking(Market::Unified).tr_id(Real),
+            "H0UNASP0"
+        );
+        assert_eq!(
+            SubscriptionKind::ExpectedConclusion(Market::Nxt).tr_id(Real),
+            "H0NXANC0"
+        );
+        assert_eq!(
+            SubscriptionKind::MarketOperation(Market::Unified).tr_id(Real),
+            "H0UNMKO0"
+        );
+        assert_eq!(SubscriptionKind::MemberTrade(Market::Krx).tr_id(Real), "H0STMBC0");
+        assert_eq!(SubscriptionKind::ProgramTrade(Market::Nxt).tr_id(Real), "H0NXPGM0");
     }
 
     #[test]

@@ -225,7 +225,27 @@ async fn emit_record(ctx: &ConnectionCtx, tr_id: &str, rec: DecodedRecord) {
             tr_key: d.mksc_shrn_iscd.clone(),
             data: d,
         },
+        DecodedRecord::ExpectedConclusion(d) => RealtimeEvent::ExpectedConclusion {
+            tr_id,
+            tr_key: d.mksc_shrn_iscd.clone(),
+            data: d,
+        },
         DecodedRecord::StockAsking(d) => RealtimeEvent::DomesticAsking {
+            tr_id,
+            tr_key: d.mksc_shrn_iscd.clone(),
+            data: d,
+        },
+        DecodedRecord::MarketOperation(d) => RealtimeEvent::MarketOperation {
+            tr_id,
+            tr_key: d.mksc_shrn_iscd.clone(),
+            data: d,
+        },
+        DecodedRecord::MemberTrade(d) => RealtimeEvent::MemberTrade {
+            tr_id,
+            tr_key: d.mksc_shrn_iscd.clone(),
+            data: d,
+        },
+        DecodedRecord::ProgramTrade(d) => RealtimeEvent::ProgramTrade {
             tr_id,
             tr_key: d.mksc_shrn_iscd.clone(),
             data: d,

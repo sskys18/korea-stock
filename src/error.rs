@@ -30,6 +30,10 @@ pub enum KisError {
     #[error("unsupported in mock environment: {tr_id}")]
     UnsupportedInMock { tr_id: String },
 
+    /// 외부 소스(KRX MDC, OpenDART) 호출 실패. KIS 토큰과 무관.
+    #[error("external: {0}")]
+    External(String),
+
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
 

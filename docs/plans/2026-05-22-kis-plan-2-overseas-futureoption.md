@@ -1951,7 +1951,7 @@ cargo test
 //! 실행: KIS_* 환경변수 설정 후
 //! `cargo run --example overseas_quote -- AAPL`
 
-use korea_stock::overseas_stock::{OverseasExchange, OverseasPeriod};
+use korea_stock::kis::overseas_stock::{OverseasExchange, OverseasPeriod};
 use korea_stock::{KisClient, KisConfig};
 
 #[tokio::main]
@@ -1997,7 +1997,7 @@ name = "overseas_quote"
 //! 선물옵션 현재가 + 호가 예제.
 //! 실행: `cargo run --example futureoption_quote -- 101W09`
 
-use korea_stock::futureoption::MarketDiv;
+use korea_stock::kis::futureoption::MarketDiv;
 use korea_stock::{KisClient, KisConfig};
 
 #[tokio::main]
@@ -2044,7 +2044,7 @@ async fn overseas_current_price() {
     let client = client().expect("KIS_* env vars");
     let os = client.overseas_stock();
     let price = os
-        .current_price(korea_stock::overseas_stock::OverseasExchange::Nasd, "AAPL")
+        .current_price(korea_stock::kis::overseas_stock::OverseasExchange::Nasd, "AAPL")
         .await
         .expect("overseas current price call");
     assert!(!price.last.is_empty(), "현재가 비어있지 않음");
@@ -2058,7 +2058,7 @@ async fn futureoption_current_price() {
     // 시세 TR은 실전·모의 동일 tr_id — 모의 환경에서도 호출 가능.
     // 종목코드는 만기에 따라 달라짐 — 호출 성공(rt_cd=0) 여부만 확인.
     let (price, raw) = fo
-        .current_price(korea_stock::futureoption::MarketDiv::IndexFuture, "101W09")
+        .current_price(korea_stock::kis::futureoption::MarketDiv::IndexFuture, "101W09")
         .await
         .expect("futureoption current price call");
     // 통합 struct 또는 raw 둘 중 하나에 데이터가 있어야 함.
@@ -2093,7 +2093,7 @@ async fn futureoption_current_price() {
 사용 예에 해외주식 한 줄 추가(선택):
 
 ```rust
-use korea_stock::overseas_stock::OverseasExchange;
+use korea_stock::kis::overseas_stock::OverseasExchange;
 let p = client.overseas_stock().current_price(OverseasExchange::Nasd, "AAPL").await?;
 ```
 

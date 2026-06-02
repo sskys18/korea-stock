@@ -1649,7 +1649,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! 잔고 + 매수가능 조회 예제 (주문은 실행 안 함 — 안전).
 //! 실행: `cargo run --example domestic_order`
 
-use korea_stock::domestic_stock::OrderType;
+use korea_stock::kis::domestic_stock::OrderType;
 use korea_stock::{KisClient, KisConfig};
 
 #[tokio::main]
@@ -1675,7 +1675,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 > `OrderType`이 공개 경로에 노출돼야 함. `domestic_stock/mod.rs`의 `pub use order::*;`가
-> `OrderType`을 재노출 — 확인. `korea_stock::domestic_stock::OrderType` 경로 유효.
+> `OrderType`을 재노출 — 확인. `korea_stock::kis::domestic_stock::OrderType` 경로 유효.
 
 검증: `cargo build --example domestic_order` 에러 0.
 커밋: `docs: 잔고·매수가능 조회 예제`

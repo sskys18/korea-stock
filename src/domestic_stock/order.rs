@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use crate::client::ApiCall;
 use crate::domestic_stock::DomesticStock;
-use crate::error::Result;
+use crate::error::{KisError, Result};
 use crate::trid::TrId;
 
 const TR_BUY: TrId = TrId::both("TTTC0012U", "VTTC0012U");
@@ -27,13 +27,23 @@ pub enum Exchange {
 }
 
 impl Exchange {
-    /// `EXCG_ID_DVSN_CD` 코드 문자열.
+    /// `EXCG_ID_DVSN_CD` 코드 문자열. 조회 TR용 — `All` 포함.
     pub fn code(self) -> &'static str {
         match self {
             Exchange::Krx => "KRX",
             Exchange::Nxt => "NXT",
             Exchange::Sor => "SOR",
             Exchange::All => "ALL",
+        }
+    }
+
+    /// 주문 TR용 코드. `All`은 조회 전용이라 주문에 쓰면 에러(실주문 오발 방지).
+    fn order_code(self) -> Result<&'static str> {
+        match self {
+            Exchange::All => Err(KisError::Decode(
+                "Exchange::All은 조회 전용 — 주문에 사용 불가".into(),
+            )),
+            _ => Ok(self.code()),
         }
     }
 }
@@ -137,12 +147,13 @@ impl DomesticStock<'_> {
 
     async fn order_cash(&self, req: OrderReq, tr: TrId) -> Result<OrderResult> {
         let env = self.client.config().environment;
+        let excg = req.exchange.order_code()?;
         let params = self.with_account(serde_json::json!({
             "PDNO": req.stock_code,
             "ORD_DVSN": req.order_type.code(),
             "ORD_QTY": req.quantity.to_string(),
             "ORD_UNPR": req.price.to_string(),
-            "EXCG_ID_DVSN_CD": req.exchange.code(),
+            "EXCG_ID_DVSN_CD": excg,
         }));
         let resp = self
             .client
@@ -171,6 +182,7 @@ impl DomesticStock<'_> {
 
     async fn order_rvsecncl(&self, req: ReviseCancelReq, dvsn: &str) -> Result<OrderResult> {
         let env = self.client.config().environment;
+        let excg = req.exchange.order_code()?;
         let params = self.with_account(serde_json::json!({
             "KRX_FWDG_ORD_ORGNO": req.krx_fwdg_ord_orgno,
             "ORGN_ODNO": req.orig_order_no,
@@ -179,7 +191,7 @@ impl DomesticStock<'_> {
             "ORD_QTY": req.quantity.to_string(),
             "ORD_UNPR": req.price.to_string(),
             "QTY_ALL_ORD_YN": if req.all { "Y" } else { "N" },
-            "EXCG_ID_DVSN_CD": req.exchange.code(),
+            "EXCG_ID_DVSN_CD": excg,
         }));
         let resp = self
             .client
@@ -214,5 +226,12 @@ mod tests {
     fn order_req_default_exchange_is_krx() {
         let req = OrderReq::new("005930", OrderType::Limit, 1, 70000);
         assert_eq!(req.exchange, Exchange::Krx);
+    }
+
+    #[test]
+    fn order_code_rejects_all() {
+        assert!(Exchange::All.order_code().is_err(), "All은 주문 불가");
+        assert_eq!(Exchange::Krx.order_code().unwrap(), "KRX");
+        assert_eq!(Exchange::Sor.order_code().unwrap(), "SOR");
     }
 }

@@ -309,8 +309,11 @@ async fn futureoption_buyable() {
 #[tokio::test]
 #[ignore = "live order — set KIS_LIVE_ORDER_TEST=1, market hours only"]
 async fn live_order_unfilled_cycle() {
+    // 실주문 가드 미설정 시 패닉 대신 조용히 skip — `--ignored` 일괄 실행이
+    // 실주문 없이 통과하도록(문서화된 명령이 깨지지 않게).
     if std::env::var("KIS_LIVE_ORDER_TEST").as_deref() != Ok("1") {
-        panic!("set KIS_LIVE_ORDER_TEST=1 to enable live order test");
+        eprintln!("live_order_unfilled_cycle skipped — set KIS_LIVE_ORDER_TEST=1 to enable");
+        return;
     }
     use kis_adapter::domestic_stock::{OrderReq, OrderType, ReviseCancelReq};
 

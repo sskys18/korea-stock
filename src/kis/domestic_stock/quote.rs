@@ -278,6 +278,7 @@ impl Period {
 }
 
 const TR_MINUTE: TrId = TrId::same("FHKST03010200");
+const TR_MINUTE_DAILY: TrId = TrId::same("FHKST03010230");
 
 /// 분봉 종목 요약 (output1). 필드 전체는 §12 output1 표.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -409,6 +410,42 @@ impl DomesticStock<'_> {
                     "FID_INPUT_HOUR_1": time,
                     "FID_PW_DATA_INCU_YN": if include_past { "Y" } else { "N" },
                     "FID_ETC_CLS_CODE": "",
+                }),
+                is_post: false,
+                needs_hashkey: false,
+            })
+            .await?;
+        Ok((resp.field("output1")?, resp.field("output2")?))
+    }
+
+    /// 주식일별분봉조회 (특정일 1분봉) — TR `FHKST03010230`.
+    ///
+    /// `date` YYYYMMDD(과거일 지정 가능), `time` HHMMSS(이 시각 이전 봉부터).
+    /// `include_past=true`면 과거 봉 포함. 한 호출 최대 ~120건 — 전 세션은 호출자가
+    /// `time`을 내려가며 페이징. 당일분봉([`minute_chart`])과 달리 **임의 날짜** 조회.
+    pub async fn minute_chart_by_date(
+        &self,
+        stock_code: &str,
+        date: &str,
+        time: &str,
+        include_past: bool,
+        market: Market,
+    ) -> Result<(MinuteSummary, Vec<MinuteCandle>)> {
+        let env = self.client.config().environment;
+        let resp = self
+            .client
+            .call(ApiCall {
+                method: reqwest::Method::GET,
+                path: "/uapi/domestic-stock/v1/quotations/inquire-time-dailychartprice".into(),
+                tr_id: TR_MINUTE_DAILY.resolve(env)?.into(),
+                tr_cont: None,
+                params: serde_json::json!({
+                    "FID_COND_MRKT_DIV_CODE": market.fid_code(),
+                    "FID_INPUT_ISCD": stock_code,
+                    "FID_INPUT_HOUR_1": time,
+                    "FID_INPUT_DATE_1": date,
+                    "FID_PW_DATA_INCU_YN": if include_past { "Y" } else { "N" },
+                    "FID_FAKE_TICK_INCU_YN": "",
                 }),
                 is_post: false,
                 needs_hashkey: false,

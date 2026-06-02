@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::client::ApiCall;
 use crate::domestic_stock::{DomesticStock, Market};
-use crate::error::Result;
+use crate::error::{KisError, Result};
 use crate::trid::TrId;
 
 const TR_VOLUME_RANK: TrId = TrId::same("FHPST01710000");
@@ -92,14 +92,20 @@ pub struct VolumeRankItem {
 impl DomesticStock<'_> {
     /// 거래량/거래대금 순위 — TR `FHPST01710000`.
     ///
-    /// 시장 전체를 `rank_by` 기준으로 랭킹. `market`으로 KRX/NXT/통합(`UN`) 선택 —
-    /// NXT 도입(2025) 후 애프터마켓/프리마켓 거래대금을 보려면 [`Market::Unified`].
+    /// 시장 전체를 `rank_by` 기준으로 랭킹. `market`은 KRX(`J`) 또는 NXT(`NX`)만 지원 —
+    /// **통합(`Unified`)은 KIS가 거부**(`OPSQ2001 INVALID FID_COND_MRKT_DIV_CODE`, 2026-06-02
+    /// 실API 확인). 통합 거래대금 스캔은 KRX/NXT 각각 조회해 호출자가 병합.
     /// 최대 30위 반환(KIS 사양). 전체 종목 대상(`FID_INPUT_ISCD="0000"`).
     pub async fn volume_rank(
         &self,
         market: Market,
         rank_by: RankBy,
     ) -> Result<Vec<VolumeRankItem>> {
+        if market == Market::Unified {
+            return Err(KisError::Decode(
+                "volume_rank는 통합(Unified) 미지원 — KRX 또는 NXT만 (KIS OPSQ2001)".into(),
+            ));
+        }
         let env = self.client.config().environment;
         let resp = self
             .client

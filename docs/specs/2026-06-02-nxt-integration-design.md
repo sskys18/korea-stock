@@ -99,6 +99,26 @@ RealtimeEvent: 신규 variant `ExpectedConclusion`, `MarketOperation`, `MemberTr
 미도입(KIS 자체 미지원 — 변경 없음):
 - short_sale_daily(`J`만)·investor_trend_estimate(market param 없음).
 
+## 라이브 검증 (2026-06-02, 실API `KIS_ENV=real`)
+
+실전 KIS API로 NXT/통합 경로 실호출 검증. **공식 Python 샘플 주석이 실API와 불일치하는 케이스 발견** — 실API rt_cd가 권위.
+
+REST per-TR × {Nxt, Unified} 실호출 결과 (`nxt_unified_support_audit` 테스트):
+
+| 메서드 | Nxt | Unified |
+|---|---|---|
+| current_price / asking_price | ✅ | ✅ |
+| period_price / minute_chart | ✅ | ✅ |
+| investor_trend_daily | ✅ | ✅ |
+| program_trade_today / daily | ✅ | ✅ |
+| **volume_rank** | ✅ | ❌ `OPSQ2001 INVALID FID_COND_MRKT_DIV_CODE` |
+
+→ `volume_rank`는 통합(UN) 미지원. 어댑터가 `Market::Unified` 호출 전 `KisError::Decode`로 가드(샘플 주석은 J/NX/UN이라 했으나 실API 거부).
+
+WS decode (H0NX*/H0UN*): **장 마감(검증 시각 20:43 KST, NXT 08:00~20:00)으로 실프레임 미수신** → 구독 수락만 확인. `realtime_nxt_asking_decode` 테스트는 장중(08:00~20:00 KST) 실행 시 65필드·중간가 tail decode 정합성 검증. **NXT WS decode 필드순서는 여전히 [Medium] 미검증** — 장중 1회 실행 필요.
+
+검증된 라이브 테스트: 단위 45 + 통합 22(실API) + 외부 4(DART/KRX) 전부 통과.
+
 > 잔고 주의: NXT 보유 종목은 거래소 무관 동일 ISIN/계좌라 `inquire-balance`에 항상
 > 나타난다. `AFHR_FLPR_YN`은 보유 목록을 거르지 않고 **평가가격 기준**만 바꾼다
 > (`X`=NXT 체결가). `EXCG_ID_DVSN_CD` 미수용 TR.

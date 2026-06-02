@@ -31,6 +31,8 @@ const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
      (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 const BLD_SHORT_BALANCE: &str = "dbms/MDC/STAT/srt/MDCSTAT30502";
 const BLD_FOREIGN_HOLDING: &str = "dbms/MDC/STAT/standard/MDCSTAT03702";
+const BLD_ALL_STOCK_OHLCV: &str = "dbms/MDC/STAT/standard/MDCSTAT01501";
+const BLD_FOREIGN_ALL: &str = "dbms/MDC/STAT/standard/MDCSTAT03701";
 
 /// KRX MDC 클라이언트. KIS 인증과 무관 — 독립 쿠키 세션.
 ///
@@ -234,6 +236,36 @@ impl KrxClient {
         )
         .await
     }
+
+    /// 전종목 일별 시세 — bld `MDCSTAT01501`.
+    ///
+    /// `trd_dd` YYYYMMDD, `mkt` 시장(`ALL`/`STK`=코스피/`KSQ`=코스닥).
+    /// 한 날짜의 전 종목 종가·등락률·거래량·거래대금 — 순환매 거래대금 패널의 횡단면 원천.
+    pub async fn all_stock_ohlcv(&self, trd_dd: &str, mkt: &str) -> Result<Vec<AllStockOhlcvRow>> {
+        self.fetch(
+            BLD_ALL_STOCK_OHLCV,
+            &[("trdDd", trd_dd), ("mktId", mkt)],
+            "OutBlock_1",
+        )
+        .await
+    }
+
+    /// 전종목 외국인 보유량 — bld `MDCSTAT03701`.
+    ///
+    /// `trd_dd` YYYYMMDD, `mkt` 시장(`ALL`/`STK`/`KSQ`).
+    /// 한 날짜의 전 종목 외국인 보유수량·지분율 — 일자간 차분이 외국인 순매수 프록시.
+    pub async fn foreign_holding_all(
+        &self,
+        trd_dd: &str,
+        mkt: &str,
+    ) -> Result<Vec<ForeignHoldingAllRow>> {
+        self.fetch(
+            BLD_FOREIGN_ALL,
+            &[("trdDd", trd_dd), ("mktId", mkt), ("isuLmtRto", "")],
+            "OutBlock_1",
+        )
+        .await
+    }
 }
 
 /// 공매도 잔고 1행 — KRX `OutBlock_1`. 컬럼명은 KRX 원본(대문자, 콤마 포함 숫자 문자열).
@@ -284,6 +316,56 @@ pub struct ForeignHoldingRow {
     pub foreign_limit_exhaust_ratio: String,
 }
 
+/// 전종목 시세 1행 — KRX `OutBlock_1`(MDCSTAT01501). 숫자는 콤마 포함 문자열.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct AllStockOhlcvRow {
+    /// 단축 종목코드.
+    #[serde(rename = "ISU_SRT_CD")]
+    pub code: String,
+    /// 종목명.
+    #[serde(rename = "ISU_ABBRV")]
+    pub name: String,
+    /// 종가.
+    #[serde(rename = "TDD_CLSPRC")]
+    pub close: String,
+    /// 등락률(%).
+    #[serde(rename = "FLUC_RT")]
+    pub change_rate: String,
+    /// 누적 거래량.
+    #[serde(rename = "ACC_TRDVOL")]
+    pub volume: String,
+    /// 누적 거래대금 — 순환매 연료.
+    #[serde(rename = "ACC_TRDVAL")]
+    pub trade_value: String,
+    /// 시가총액.
+    #[serde(rename = "MKTCAP")]
+    pub market_cap: String,
+}
+
+/// 전종목 외국인 보유 1행 — KRX `OutBlock_1`(MDCSTAT03701).
+///
+/// 03701 전종목 스냅샷엔 종목명이 없을 수 있어 `name`은 누락 내성(전종목시세와 코드로 조인).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ForeignHoldingAllRow {
+    /// 단축 종목코드.
+    #[serde(rename = "ISU_SRT_CD")]
+    pub code: String,
+    /// 상장 주식수.
+    #[serde(rename = "LIST_SHRS")]
+    pub list_shares: String,
+    /// 외국인 보유 수량.
+    #[serde(rename = "FORN_HD_QTY")]
+    pub foreign_qty: String,
+    /// 외국인 지분율(%).
+    #[serde(rename = "FORN_SHR_RT")]
+    pub foreign_ratio: String,
+    /// 외국인 한도소진율(%).
+    #[serde(rename = "FORN_LMT_EXHST_RT")]
+    pub foreign_limit_exhaust_ratio: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -310,6 +392,36 @@ mod tests {
         .unwrap();
         assert_eq!(row.date, "2021/01/15");
         assert_eq!(row.foreign_ratio, "55.57");
+    }
+
+    #[test]
+    fn all_stock_ohlcv_rename_and_default() {
+        let row: AllStockOhlcvRow = serde_json::from_value(serde_json::json!({
+            "ISU_SRT_CD": "005930",
+            "ISU_ABBRV": "삼성전자",
+            "TDD_CLSPRC": "75,000",
+            "ACC_TRDVAL": "1,234,567,890",
+            "FLUC_RT": "1.35",
+        }))
+        .unwrap();
+        assert_eq!(row.code, "005930");
+        assert_eq!(row.name, "삼성전자");
+        assert_eq!(row.trade_value, "1,234,567,890");
+        assert_eq!(row.market_cap, ""); // 누락 → default
+    }
+
+    #[test]
+    fn foreign_holding_all_rename_and_default() {
+        let row: ForeignHoldingAllRow = serde_json::from_value(serde_json::json!({
+            "ISU_SRT_CD": "005930",
+            "FORN_HD_QTY": "3,100,000,000",
+            "FORN_SHR_RT": "52.10",
+        }))
+        .unwrap();
+        assert_eq!(row.code, "005930");
+        assert_eq!(row.foreign_qty, "3,100,000,000");
+        assert_eq!(row.foreign_ratio, "52.10");
+        assert_eq!(row.list_shares, ""); // 누락 → default
     }
 
     #[test]

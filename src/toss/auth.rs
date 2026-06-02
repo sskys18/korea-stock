@@ -79,6 +79,23 @@ impl Auth {
         Ok(token)
     }
 
+    /// 토큰 강제 재발급. 메모리·파일 캐시를 무시하고 새 토큰을 발급해 저장한다.
+    ///
+    /// 401(토큰 거부) 복구용. 토스는 재발급 시 이전 토큰을 즉시 무효화하므로, 외부
+    /// 프로세스가 재발급했거나 토큰이 서버측에서 폐기되면 메모리의 "만료 전" 토큰이
+    /// 영구히 401을 받는다 — 만료시각만 보는 [`token`]은 이를 못 잡는다. 이때
+    /// 호출자([`TossClient::call`])가 본 메서드로 강제 재발급 후 1회 재시도한다.
+    /// 캐시된 토큰을 다시 읽지 않는 이유: 무효화된 그 토큰이 파일에도 그대로일 수
+    /// 있어, 무조건 신규 발급해야 확실히 회복된다.
+    pub(crate) async fn force_refresh(&self) -> Result<String> {
+        let mut state = self.state.lock().await;
+        let fresh = self.issue().await?;
+        self.save_cache(&fresh).await;
+        let token = fresh.access_token.clone();
+        *state = Some(fresh);
+        Ok(token)
+    }
+
     /// 토큰 캐시 스코프 — `{base_url}|{client_id}`. base·client별 격리.
     fn scope(&self) -> String {
         format!("{}|{}", self.base_url, self.client_id)

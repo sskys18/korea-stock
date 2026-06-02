@@ -144,19 +144,30 @@ impl TossClient {
         })
     }
 
-    /// 도메인 모듈 공용 호출. 429(요청 한도 초과) 시 재시도.
+    /// 도메인 모듈 공용 호출. 429(요청 한도 초과) 재시도 + 401(토큰 거부) 1회 복구.
     ///
-    /// 실제 대기는 `call_once`가 응답의 `Retry-After`만큼 직접 수행한 뒤 429 에러를 던진다.
-    /// 이 루프는 그 직후 재시도를 `MAX_RETRIES`회 상한으로 반복한다. KIS의 EGW00201
-    /// 백오프 루프 구조를 그대로 가져오되 트리거를 429로 교체한 형태다.
+    /// 429: 실제 대기는 `call_once`가 응답의 `Retry-After`만큼 직접 수행한 뒤 429 에러를
+    /// 던진다. 이 루프는 그 직후 재시도를 `MAX_RETRIES`회 상한으로 반복한다. KIS의
+    /// EGW00201 백오프 루프 구조를 그대로 가져오되 트리거를 429로 교체한 형태다.
+    ///
+    /// 401: 토스는 재발급 시 이전 토큰을 무효화하므로 메모리의 "만료 전" 토큰이 거부될 수
+    /// 있다. 첫 401에 한해 토큰을 강제 재발급([`Auth::force_refresh`])하고 1회 재시도한다.
+    /// 자격증명 자체가 틀리면 재발급은 OAuth2 에러로 실패하고, 재발급 후에도 401이면
+    /// 그대로 반환한다(무한 루프 방지).
     pub(crate) async fn call(&self, c: ApiCall) -> Result<RawResponse> {
         const MAX_RETRIES: u32 = 4;
         let mut attempt = 0;
+        let mut auth_retried = false;
         loop {
             match self.call_once(&c).await {
                 Err(TossError::Api { status, .. }) if status == 429 && attempt < MAX_RETRIES => {
                     tracing::warn!("429 rate limited — retry {}/{}", attempt + 1, MAX_RETRIES);
                     attempt += 1;
+                }
+                Err(TossError::Api { status, .. }) if status == 401 && !auth_retried => {
+                    tracing::warn!("401 — 토큰 거부 추정, 강제 재발급 후 1회 재시도");
+                    self.auth.force_refresh().await?;
+                    auth_retried = true;
                 }
                 other => return other,
             }

@@ -121,7 +121,7 @@ key/iv 미설치 상태에서 암호화 프레임(`data[0]=='1'`)이 도착하�
 | `src/realtime/decode.rs` | 프레임 파싱, tr_id별 필드 매핑, 이벤트 생성 | T4 |
 | `src/realtime/subscribe.rs` | 구독/해지 프레임, `SubscriptionHandle`, `ControlMsg` | T5 |
 | `src/client.rs` | `KisClient::realtime()` 액세서 추가 | T6 |
-| `examples/realtime_feed.rs` | 실시간 체결가 구독 CLI | T9 |
+| `examples/kis_realtime_feed.rs` | 실시간 체결가 구독 CLI | T9 |
 | `tests/integration.rs` | 모의 WS 구독 1건 스모크 (`#[ignore]`) | T10 |
 | `README.md` | 실시간 사용법 절 추가 | T11 |
 
@@ -1378,7 +1378,7 @@ async fn emit_record(ctx: &ConnectionCtx, tr_id: &str, rec: DecodedRecord) {
 
 ```
 cargo build
-cargo build --examples       # examples/realtime_feed.rs는 T9에서 생성 — 그 전엔 생략
+cargo build --examples       # examples/kis_realtime_feed.rs는 T9에서 생성 — 그 전엔 생략
 cargo clippy -- -D warnings
 cargo test
 ```
@@ -1414,12 +1414,12 @@ cargo test
 
 ---
 
-## T9 — `examples/realtime_feed.rs`
+## T9 — `examples/kis_realtime_feed.rs`
 
 ```rust
 //! 실시간 체결가 구독 예제.
 //! 실행: KIS_* 환경변수 설정 후
-//! `cargo run --example realtime_feed -- 005930 000660`
+//! `cargo run --example kis_realtime_feed -- 005930 000660`
 //! (인자 없으면 005930 기본. Ctrl-C로 종료.)
 
 use korea_stock::{KisClient, KisConfig, RealtimeEvent, SubscriptionKind};
@@ -1487,7 +1487,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 > 필드명이 다르면 맞춰 수정. `Cargo.toml`에 `[[example]] name = "realtime_feed"`
 > 항목 추가.
 
-검증: `cargo build --example realtime_feed` 에러 0.
+검증: `cargo build --example kis_realtime_feed` 에러 0.
 (자격증명 있으면 수동 실행 — 장 시간대에 체결가 출력 확인.)
 커밋: `docs: 실시간 체결가 구독 예제`
 

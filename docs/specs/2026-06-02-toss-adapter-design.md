@@ -95,9 +95,13 @@ pub type Result<T> = std::result::Result<T, TossError>;
 토스 레이트리밋은 **그룹별(MARKET_DATA, MARKET_DATA_CHART, ORDER, ASSET, ...)** 이고
 응답 헤더로만 통보된다(호출 전 알 수 없음). 따라서 **반응형(reactive)** 이 권위 메커니즘이다.
 
-- 429 수신 시 `Retry-After` 헤더(초) → 없으면 `X-RateLimit-Reset` → 없으면 지수 백오프 순으로
-  대기 후 재시도. KIS의 `EGW00201` 백오프 루프 구조를 그대로 가져오되 트리거를 429 + Retry-After로 교체.
-  `MAX_RETRIES`(4)로 상한.
+- 429 수신 시 `Retry-After` 헤더 → 없으면 `X-RateLimit-Reset`(초) → 없으면 기본 1초 순으로
+  대기 후 재시도. `Retry-After`는 RFC7231상 delta-seconds(정수)·HTTP-date 두 형식이라 정수 우선
+  파싱, 실패 시 RFC2822 날짜로 환산하며 최종 대기는 [1,300]초로 클램프(과소·과대 대기 방어).
+  KIS의 `EGW00201` 백오프 루프 구조를 그대로 가져오되 트리거를 429 + Retry-After로 교체. `MAX_RETRIES`(4)로 상한.
+- **401 복구**: 토스는 재발급 시 이전 토큰을 무효화하므로 메모리의 "만료 전" 토큰이 거부될 수 있다(§3.1).
+  첫 401에 한해 `Auth::force_refresh`로 강제 재발급 후 1회 재시도; 자격증명 오류면 OAuth2 에러로 실패,
+  재발급 후에도 401이면 그대로 반환(무한 루프 방지).
 - `src/ratelimit.rs`의 `RateLimiter`(토큰버킷)는 **부분 적합**하다: 토스 그룹별 한도를 정적으로 알 수 없으니
   버킷에 그룹별 req/s를 박지 않는다. 대신 **선택적 클라이언트측 글로벌 캡**으로만 재사용 —
   `TossConfig.rate_limit: Option<u32>`가 `Some(n)`이면 그 값으로 버킷 생성, `None`이면 캡 없음(429 루프에만 의존).

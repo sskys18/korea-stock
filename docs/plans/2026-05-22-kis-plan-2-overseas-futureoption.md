@@ -71,8 +71,8 @@ Plan 2 전 태스크가 **정확히 그대로** 따른다.
 | `src/futureoption/quote.rs` | TR 6·7 시세 (현재가/호가) | T7 |
 | `src/futureoption/order.rs` | TR 1·2 주문 (주문/정정취소) | T8 |
 | `src/futureoption/account.rs` | TR 3·4·5 계좌 (잔고/체결내역/매수가능) | T9 |
-| `examples/overseas_quote.rs` | 해외 현재가+기간시세 CLI | T11 |
-| `examples/futureoption_quote.rs` | 선물옵션 현재가+호가 CLI | T12 |
+| `examples/kis_overseas_quote.rs` | 해외 현재가+기간시세 CLI | T11 |
+| `examples/kis_futureoption_quote.rs` | 선물옵션 현재가+호가 CLI | T12 |
 | `tests/integration.rs` | 해외·선물옵션 스모크 2건 추가 | T13 (수정) |
 | `README.md` | Plan 2 범위 반영 | T14 (수정) |
 | `Cargo.toml` | `[[example]]` 2개 추가 | T11, T12 |
@@ -1944,12 +1944,12 @@ cargo test
 
 ---
 
-## T11 — `examples/overseas_quote.rs`
+## T11 — `examples/kis_overseas_quote.rs`
 
 ```rust
 //! 해외주식 현재가 + 기간시세 예제.
 //! 실행: KIS_* 환경변수 설정 후
-//! `cargo run --example overseas_quote -- AAPL`
+//! `cargo run --example kis_overseas_quote -- AAPL`
 
 use korea_stock::kis::overseas_stock::{OverseasExchange, OverseasPeriod};
 use korea_stock::{KisClient, KisConfig};
@@ -1986,16 +1986,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 name = "overseas_quote"
 ```
 
-검증: `cargo build --example overseas_quote` 에러 0.
+검증: `cargo build --example kis_overseas_quote` 에러 0.
 커밋: `docs: 해외주식 현재가·기간시세 예제`
 
 ---
 
-## T12 — `examples/futureoption_quote.rs`
+## T12 — `examples/kis_futureoption_quote.rs`
 
 ```rust
 //! 선물옵션 현재가 + 호가 예제.
-//! 실행: `cargo run --example futureoption_quote -- 101W09`
+//! 실행: `cargo run --example kis_futureoption_quote -- 101W09`
 
 use korea_stock::kis::futureoption::MarketDiv;
 use korea_stock::{KisClient, KisConfig};
@@ -2026,7 +2026,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 name = "futureoption_quote"
 ```
 
-검증: `cargo build --example futureoption_quote` 에러 0.
+검증: `cargo build --example kis_futureoption_quote` 에러 0.
 커밋: `docs: 선물옵션 현재가·호가 예제`
 
 ---

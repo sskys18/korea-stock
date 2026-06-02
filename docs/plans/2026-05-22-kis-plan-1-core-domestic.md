@@ -43,8 +43,8 @@ Plan 2(해외주식·선물옵션), Plan 3(실시간 WS)은 여기서 확정된 
 | `src/domestic_stock/quote.rs` | TR 9·10·11·12 시세 | T9 |
 | `src/domestic_stock/order.rs` | TR 1·2·3·4 주문 | T10 |
 | `src/domestic_stock/account.rs` | TR 5·6·7·8 계좌·체결 | T11 |
-| `examples/domestic_quote.rs` | 현재가 조회 CLI | T12 |
-| `examples/domestic_order.rs` | 잔고+매수가능 CLI | T13 |
+| `examples/kis_domestic_quote.rs` | 현재가 조회 CLI | T12 |
+| `examples/kis_domestic_order.rs` | 잔고+매수가능 CLI | T13 |
 | `tests/integration.rs` | 모의환경 실호출 스모크 | T14 |
 | `README.md` | 사용법 | T15 |
 
@@ -1608,11 +1608,11 @@ auth 2개 통과 (총 6 passed).
 
 ---
 
-## T12 — `examples/domestic_quote.rs`
+## T12 — `examples/kis_domestic_quote.rs`
 
 ```rust
 //! 현재가 조회 예제. 실행: KIS_* 환경변수 설정 후
-//! `cargo run --example domestic_quote -- 005930`
+//! `cargo run --example kis_domestic_quote -- 005930`
 
 use korea_stock::{KisClient, KisConfig};
 
@@ -1636,18 +1636,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-검증: `cargo build --example domestic_quote` 에러 0.
-(자격증명 있으면 `cargo run --example domestic_quote -- 005930` 수동 확인.)
+검증: `cargo build --example kis_domestic_quote` 에러 0.
+(자격증명 있으면 `cargo run --example kis_domestic_quote -- 005930` 수동 확인.)
 
 커밋: `docs: 현재가 조회 예제`
 
 ---
 
-## T13 — `examples/domestic_order.rs`
+## T13 — `examples/kis_domestic_order.rs`
 
 ```rust
 //! 잔고 + 매수가능 조회 예제 (주문은 실행 안 함 — 안전).
-//! 실행: `cargo run --example domestic_order`
+//! 실행: `cargo run --example kis_domestic_order`
 
 use korea_stock::kis::domestic_stock::OrderType;
 use korea_stock::{KisClient, KisConfig};
@@ -1677,7 +1677,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 > `OrderType`이 공개 경로에 노출돼야 함. `domestic_stock/mod.rs`의 `pub use order::*;`가
 > `OrderType`을 재노출 — 확인. `korea_stock::kis::domestic_stock::OrderType` 경로 유효.
 
-검증: `cargo build --example domestic_order` 에러 0.
+검증: `cargo build --example kis_domestic_order` 에러 0.
 커밋: `docs: 잔고·매수가능 조회 예제`
 
 ---

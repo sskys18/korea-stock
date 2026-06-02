@@ -3,7 +3,7 @@
 //! `cargo run --example realtime_feed -- 005930 000660`
 //! (인자 없으면 005930 기본. Ctrl-C로 종료.)
 
-use kis_adapter::{KisClient, KisConfig, RealtimeEvent, SubscriptionKind};
+use kis_adapter::{KisClient, KisConfig, Market, RealtimeEvent, SubscriptionKind};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,7 +24,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut handles = Vec::new();
     for code in &codes {
-        handles.push(rt.subscribe(SubscriptionKind::DomesticTrade, code).await?);
+        handles.push(
+            rt.subscribe(SubscriptionKind::DomesticTrade(Market::Krx), code)
+                .await?,
+        );
         println!("구독: {code}");
     }
 

@@ -8,7 +8,9 @@ mod decode;
 mod run;
 mod subscribe;
 
-pub use decode::{OrderNotice, OverseasTrade, StockAsking, StockTrade};
+pub use decode::{
+    MarketOperation, MemberTrade, OrderNotice, OverseasTrade, ProgramTrade, StockAsking, StockTrade,
+};
 pub use subscribe::{SubscriptionHandle, SubscriptionKind};
 
 use std::collections::HashMap;
@@ -41,11 +43,35 @@ pub enum RealtimeEvent {
         tr_key: String,
         data: decode::StockTrade,
     },
-    /// 국내주식 호가 (H0STASP0).
+    /// 국내주식 호가 (H0{ST,NX,UN}ASP0). 시장은 tr_id로 구분.
     DomesticAsking {
         tr_id: String,
         tr_key: String,
         data: decode::StockAsking,
+    },
+    /// 국내주식 예상체결 (H0{ST,NX,UN}ANC0). 시장은 tr_id로 구분.
+    ExpectedConclusion {
+        tr_id: String,
+        tr_key: String,
+        data: decode::StockTrade,
+    },
+    /// 국내주식 장운영 (H0{ST,NX,UN}MKO0). 통합(UN)은 tr_key 빈값.
+    MarketOperation {
+        tr_id: String,
+        tr_key: String,
+        data: decode::MarketOperation,
+    },
+    /// 국내주식 회원사 (H0{ST,NX,UN}MBC0).
+    MemberTrade {
+        tr_id: String,
+        tr_key: String,
+        data: decode::MemberTrade,
+    },
+    /// 국내주식 프로그램매매 (H0{ST,NX,UN}PGM0).
+    ProgramTrade {
+        tr_id: String,
+        tr_key: String,
+        data: decode::ProgramTrade,
     },
     /// 체결통보 (H0STCNI0/9).
     OrderNotice {

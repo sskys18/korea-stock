@@ -16,6 +16,7 @@ pub mod realtime;
 
 pub use client::{KisClient, KisResponse, RawRequest};
 pub use config::{Environment, KisConfig};
+pub use domestic_stock::{Exchange, Market};
 pub use error::{KisError, Result};
 pub use realtime::{
     OrderNotice, OverseasTrade, RealtimeClient, RealtimeEvent, StockAsking, StockTrade,

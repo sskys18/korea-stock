@@ -121,6 +121,13 @@ pub struct StockAsking {
     pub ovtm_total_askp_rsqn_icdc: String, // idx 56 시간외 총 매도호가 잔량 (증감)
     pub ovtm_total_bidp_rsqn_icdc: String, // idx 57 시간외 총 매수호가 잔량 (증감)
     pub stck_bsop_cls_code: String,        // idx 58 주식매매 구분코드
+    // idx 59~64: NXT/통합(H0NXASP0/H0UNASP0)만 존재 — 중간가호가. KRX(H0STASP0)는 빈 String.
+    pub kmid_prc: String,        // idx 59 KRX 중간가
+    pub kmid_total_rsqn: String, // idx 60 KRX 중간가 총잔량
+    pub kmid_cls_code: String,   // idx 61 KRX 중간가 구분코드
+    pub nmid_prc: String,        // idx 62 NXT 중간가
+    pub nmid_total_rsqn: String, // idx 63 NXT 중간가 총잔량
+    pub nmid_cls_code: String,   // idx 64 NXT 중간가 구분코드
 }
 
 /// 체결통보 (H0STCNI0/H0STCNI9) — 체결/접수 공통 26필드.
@@ -188,11 +195,143 @@ pub struct OverseasTrade {
     pub mtyp: String, // 26 시장구분
 }
 
-/// tr_id별 `^` 분해 후 한 건당 필드 수.
+/// 국내주식 실시간 장운영 (H0{ST,NX,UN}MKO0). ST/NX 11필드, UN 10필드(종목코드 없음).
+/// 필드 순서 원천: docs/kis-api/nxt-ws-columns.txt — 와이어 미검증.
+#[derive(Debug, Clone)]
+pub struct MarketOperation {
+    pub mksc_shrn_iscd: String,     // 종목코드 (UN 통합은 빈값)
+    pub trht_yn: String,            // 거래정지여부
+    pub tr_susp_reas_cntt: String,  // 거래정지사유내용
+    pub mkop_cls_code: String,      // 장운영구분코드
+    pub antc_mkop_cls_code: String, // 예상장운영구분코드
+    pub mrkt_trtm_cls_code: String, // 임의종료구분코드
+    pub divi_app_cls_code: String,  // 동시호가배분처리구분코드
+    pub iscd_stat_cls_code: String, // 종목상태구분코드
+    pub vi_cls_code: String,        // VI적용구분코드
+    pub ovtm_vi_cls_code: String,   // 시간외VI적용구분코드
+    pub exch_cls_code: String,      // 거래소구분코드
+}
+
+/// 국내주식 실시간 프로그램매매 (H0{ST,NX,UN}PGM0). 11필드.
+/// 필드 순서 원천: docs/kis-api/nxt-ws-columns.txt — 와이어 미검증.
+#[derive(Debug, Clone)]
+pub struct ProgramTrade {
+    pub mksc_shrn_iscd: String, // 종목코드
+    pub stck_cntg_hour: String, // 체결시간
+    pub seln_cnqn: String,      // 매도체결수량
+    pub seln_tr_pbmn: String,   // 매도거래대금
+    pub shnu_cnqn: String,      // 매수체결수량
+    pub shnu_tr_pbmn: String,   // 매수거래대금
+    pub ntby_cnqn: String,      // 순매수체결수량
+    pub ntby_tr_pbmn: String,   // 순매수거래대금
+    pub seln_rsqn: String,      // 매도잔량
+    pub shnu_rsqn: String,      // 매수잔량
+    pub whol_ntby_qty: String,  // 전체순매수수량
+}
+
+/// 국내주식 실시간 회원사 (H0{ST,NX,UN}MBC0). 78필드.
+/// 필드 순서 원천: docs/kis-api/nxt-ws-columns.txt — 와이어 미검증.
+#[derive(Debug, Clone)]
+pub struct MemberTrade {
+    pub mksc_shrn_iscd: String,
+    pub seln2_mbcr_name1: String,
+    pub seln2_mbcr_name2: String,
+    pub seln2_mbcr_name3: String,
+    pub seln2_mbcr_name4: String,
+    pub seln2_mbcr_name5: String,
+    pub byov_mbcr_name1: String,
+    pub byov_mbcr_name2: String,
+    pub byov_mbcr_name3: String,
+    pub byov_mbcr_name4: String,
+    pub byov_mbcr_name5: String,
+    pub total_seln_qty1: String,
+    pub total_seln_qty2: String,
+    pub total_seln_qty3: String,
+    pub total_seln_qty4: String,
+    pub total_seln_qty5: String,
+    pub total_shnu_qty1: String,
+    pub total_shnu_qty2: String,
+    pub total_shnu_qty3: String,
+    pub total_shnu_qty4: String,
+    pub total_shnu_qty5: String,
+    pub seln_mbcr_glob_yn_1: String,
+    pub seln_mbcr_glob_yn_2: String,
+    pub seln_mbcr_glob_yn_3: String,
+    pub seln_mbcr_glob_yn_4: String,
+    pub seln_mbcr_glob_yn_5: String,
+    pub shnu_mbcr_glob_yn_1: String,
+    pub shnu_mbcr_glob_yn_2: String,
+    pub shnu_mbcr_glob_yn_3: String,
+    pub shnu_mbcr_glob_yn_4: String,
+    pub shnu_mbcr_glob_yn_5: String,
+    pub seln_mbcr_no1: String,
+    pub seln_mbcr_no2: String,
+    pub seln_mbcr_no3: String,
+    pub seln_mbcr_no4: String,
+    pub seln_mbcr_no5: String,
+    pub shnu_mbcr_no1: String,
+    pub shnu_mbcr_no2: String,
+    pub shnu_mbcr_no3: String,
+    pub shnu_mbcr_no4: String,
+    pub shnu_mbcr_no5: String,
+    pub seln_mbcr_rlim1: String,
+    pub seln_mbcr_rlim2: String,
+    pub seln_mbcr_rlim3: String,
+    pub seln_mbcr_rlim4: String,
+    pub seln_mbcr_rlim5: String,
+    pub shnu_mbcr_rlim1: String,
+    pub shnu_mbcr_rlim2: String,
+    pub shnu_mbcr_rlim3: String,
+    pub shnu_mbcr_rlim4: String,
+    pub shnu_mbcr_rlim5: String,
+    pub seln_qty_icdc1: String,
+    pub seln_qty_icdc2: String,
+    pub seln_qty_icdc3: String,
+    pub seln_qty_icdc4: String,
+    pub seln_qty_icdc5: String,
+    pub shnu_qty_icdc1: String,
+    pub shnu_qty_icdc2: String,
+    pub shnu_qty_icdc3: String,
+    pub shnu_qty_icdc4: String,
+    pub shnu_qty_icdc5: String,
+    pub glob_total_seln_qty: String,
+    pub glob_total_shnu_qty: String,
+    pub glob_total_seln_qty_icdc: String,
+    pub glob_total_shnu_qty_icdc: String,
+    pub glob_ntby_qty: String,
+    pub glob_seln_rlim: String,
+    pub glob_shnu_rlim: String,
+    pub seln2_mbcr_eng_name1: String,
+    pub seln2_mbcr_eng_name2: String,
+    pub seln2_mbcr_eng_name3: String,
+    pub seln2_mbcr_eng_name4: String,
+    pub seln2_mbcr_eng_name5: String,
+    pub byov_mbcr_eng_name1: String,
+    pub byov_mbcr_eng_name2: String,
+    pub byov_mbcr_eng_name3: String,
+    pub byov_mbcr_eng_name4: String,
+    pub byov_mbcr_eng_name5: String,
+}
+
+/// tr_id별 `^` 분해 후 한 건당 필드 수. KRX(ST)/NXT(NX)/통합(UN) 비균일 주의.
 fn fields_per_record(tr_id: &str) -> Option<usize> {
     match tr_id {
-        "H0STCNT0" => Some(46),
+        // 체결가 CNT — 3시장 동일 46.
+        "H0STCNT0" | "H0NXCNT0" | "H0UNCNT0" => Some(46),
+        // 호가 ASP — KRX 59, NXT/통합 65 (중간가 6필드 추가).
         "H0STASP0" => Some(59),
+        "H0NXASP0" | "H0UNASP0" => Some(65),
+        // 예상체결 ANC — KRX 45, NXT/통합 46 (VI 기준가 추가).
+        "H0STANC0" => Some(45),
+        "H0NXANC0" | "H0UNANC0" => Some(46),
+        // 장운영 MKO — ST/NX 11, 통합 10 (종목코드 없음).
+        "H0STMKO0" | "H0NXMKO0" => Some(11),
+        "H0UNMKO0" => Some(10),
+        // 회원사 MBC — 3시장 동일 78.
+        "H0STMBC0" | "H0NXMBC0" | "H0UNMBC0" => Some(78),
+        // 프로그램매매 PGM — 3시장 동일 11.
+        "H0STPGM0" | "H0NXPGM0" | "H0UNPGM0" => Some(11),
+        // 체결통보 / 해외체결가 — 불변.
         "H0STCNI0" | "H0STCNI9" => Some(26),
         "HDFSCNT0" => Some(26),
         _ => None,
@@ -257,16 +396,23 @@ pub(crate) fn decode_frame(raw: &str, creds: Option<&AesCreds>) -> Result<Vec<De
 #[derive(Debug, Clone)]
 pub(crate) enum DecodedRecord {
     StockTrade(StockTrade),
+    /// 예상체결 (ANC) — 체결가와 동일 레이아웃, 별도 이벤트.
+    ExpectedConclusion(StockTrade),
     StockAsking(StockAsking),
+    MarketOperation(MarketOperation),
+    MemberTrade(MemberTrade),
+    ProgramTrade(ProgramTrade),
     OrderNotice(OrderNotice),
     OverseasTrade(OverseasTrade),
 }
 
 fn record_from_fields(tr_id: &str, f: &[&str]) -> Result<DecodedRecord> {
-    let g = |i: usize| f[i].to_string();
-    Ok(match tr_id {
-        "H0STCNT0" => DecodedRecord::StockTrade(StockTrade {
-            mksc_shrn_iscd: g(0),
+    // 비균일 레이아웃(ASP 59/65, ANC 45/46, MKO 11/10) 안전 읽기 — OOB는 빈 String.
+    let g = |i: usize| f.get(i).map(|s| s.to_string()).unwrap_or_default();
+    // 체결가(CNT)·예상체결(ANC)는 동일 46필드 레이아웃 — 빌더 1개 재사용.
+    // ANC KRX(45필드)는 idx45 vi_stnd_prc 없음 → 안전 getter가 빈 String 처리.
+    let stock_trade = || StockTrade {
+        mksc_shrn_iscd: g(0),
             stck_cntg_hour: g(1),
             stck_prpr: g(2),
             prdy_vrss_sign: g(3),
@@ -312,8 +458,13 @@ fn record_from_fields(tr_id: &str, f: &[&str]) -> Result<DecodedRecord> {
             hour_cls_code: g(43),
             mrkt_trtm_cls_code: g(44),
             vi_stnd_prc: g(45),
-        }),
-        "H0STASP0" => DecodedRecord::StockAsking(StockAsking {
+    };
+    Ok(match tr_id {
+        "H0STCNT0" | "H0NXCNT0" | "H0UNCNT0" => DecodedRecord::StockTrade(stock_trade()),
+        "H0STANC0" | "H0NXANC0" | "H0UNANC0" => {
+            DecodedRecord::ExpectedConclusion(stock_trade())
+        }
+        "H0STASP0" | "H0NXASP0" | "H0UNASP0" => DecodedRecord::StockAsking(StockAsking {
             mksc_shrn_iscd: g(0),
             bsop_hour: g(1),
             hour_cls_code: g(2),
@@ -373,6 +524,12 @@ fn record_from_fields(tr_id: &str, f: &[&str]) -> Result<DecodedRecord> {
             ovtm_total_askp_rsqn_icdc: g(56),
             ovtm_total_bidp_rsqn_icdc: g(57),
             stck_bsop_cls_code: g(58),
+            kmid_prc: g(59),
+            kmid_total_rsqn: g(60),
+            kmid_cls_code: g(61),
+            nmid_prc: g(62),
+            nmid_total_rsqn: g(63),
+            nmid_cls_code: g(64),
         }),
         "H0STCNI0" | "H0STCNI9" => DecodedRecord::OrderNotice(OrderNotice {
             cust_id: g(0),
@@ -429,6 +586,117 @@ fn record_from_fields(tr_id: &str, f: &[&str]) -> Result<DecodedRecord> {
             asvl: g(23),
             strn: g(24),
             mtyp: g(25),
+        }),
+        "H0STMKO0" | "H0NXMKO0" | "H0UNMKO0" => {
+            // 통합(UN)은 종목코드 필드 없음 → idx 1칸 당겨짐.
+            let un = tr_id == "H0UNMKO0";
+            let o = usize::from(!un);
+            DecodedRecord::MarketOperation(MarketOperation {
+                mksc_shrn_iscd: if un { String::new() } else { g(0) },
+                trht_yn: g(o),
+                tr_susp_reas_cntt: g(o + 1),
+                mkop_cls_code: g(o + 2),
+                antc_mkop_cls_code: g(o + 3),
+                mrkt_trtm_cls_code: g(o + 4),
+                divi_app_cls_code: g(o + 5),
+                iscd_stat_cls_code: g(o + 6),
+                vi_cls_code: g(o + 7),
+                ovtm_vi_cls_code: g(o + 8),
+                exch_cls_code: g(o + 9),
+            })
+        }
+        "H0STPGM0" | "H0NXPGM0" | "H0UNPGM0" => DecodedRecord::ProgramTrade(ProgramTrade {
+            mksc_shrn_iscd: g(0),
+            stck_cntg_hour: g(1),
+            seln_cnqn: g(2),
+            seln_tr_pbmn: g(3),
+            shnu_cnqn: g(4),
+            shnu_tr_pbmn: g(5),
+            ntby_cnqn: g(6),
+            ntby_tr_pbmn: g(7),
+            seln_rsqn: g(8),
+            shnu_rsqn: g(9),
+            whol_ntby_qty: g(10),
+        }),
+        "H0STMBC0" | "H0NXMBC0" | "H0UNMBC0" => DecodedRecord::MemberTrade(MemberTrade {
+            mksc_shrn_iscd: g(0),
+            seln2_mbcr_name1: g(1),
+            seln2_mbcr_name2: g(2),
+            seln2_mbcr_name3: g(3),
+            seln2_mbcr_name4: g(4),
+            seln2_mbcr_name5: g(5),
+            byov_mbcr_name1: g(6),
+            byov_mbcr_name2: g(7),
+            byov_mbcr_name3: g(8),
+            byov_mbcr_name4: g(9),
+            byov_mbcr_name5: g(10),
+            total_seln_qty1: g(11),
+            total_seln_qty2: g(12),
+            total_seln_qty3: g(13),
+            total_seln_qty4: g(14),
+            total_seln_qty5: g(15),
+            total_shnu_qty1: g(16),
+            total_shnu_qty2: g(17),
+            total_shnu_qty3: g(18),
+            total_shnu_qty4: g(19),
+            total_shnu_qty5: g(20),
+            seln_mbcr_glob_yn_1: g(21),
+            seln_mbcr_glob_yn_2: g(22),
+            seln_mbcr_glob_yn_3: g(23),
+            seln_mbcr_glob_yn_4: g(24),
+            seln_mbcr_glob_yn_5: g(25),
+            shnu_mbcr_glob_yn_1: g(26),
+            shnu_mbcr_glob_yn_2: g(27),
+            shnu_mbcr_glob_yn_3: g(28),
+            shnu_mbcr_glob_yn_4: g(29),
+            shnu_mbcr_glob_yn_5: g(30),
+            seln_mbcr_no1: g(31),
+            seln_mbcr_no2: g(32),
+            seln_mbcr_no3: g(33),
+            seln_mbcr_no4: g(34),
+            seln_mbcr_no5: g(35),
+            shnu_mbcr_no1: g(36),
+            shnu_mbcr_no2: g(37),
+            shnu_mbcr_no3: g(38),
+            shnu_mbcr_no4: g(39),
+            shnu_mbcr_no5: g(40),
+            seln_mbcr_rlim1: g(41),
+            seln_mbcr_rlim2: g(42),
+            seln_mbcr_rlim3: g(43),
+            seln_mbcr_rlim4: g(44),
+            seln_mbcr_rlim5: g(45),
+            shnu_mbcr_rlim1: g(46),
+            shnu_mbcr_rlim2: g(47),
+            shnu_mbcr_rlim3: g(48),
+            shnu_mbcr_rlim4: g(49),
+            shnu_mbcr_rlim5: g(50),
+            seln_qty_icdc1: g(51),
+            seln_qty_icdc2: g(52),
+            seln_qty_icdc3: g(53),
+            seln_qty_icdc4: g(54),
+            seln_qty_icdc5: g(55),
+            shnu_qty_icdc1: g(56),
+            shnu_qty_icdc2: g(57),
+            shnu_qty_icdc3: g(58),
+            shnu_qty_icdc4: g(59),
+            shnu_qty_icdc5: g(60),
+            glob_total_seln_qty: g(61),
+            glob_total_shnu_qty: g(62),
+            glob_total_seln_qty_icdc: g(63),
+            glob_total_shnu_qty_icdc: g(64),
+            glob_ntby_qty: g(65),
+            glob_seln_rlim: g(66),
+            glob_shnu_rlim: g(67),
+            seln2_mbcr_eng_name1: g(68),
+            seln2_mbcr_eng_name2: g(69),
+            seln2_mbcr_eng_name3: g(70),
+            seln2_mbcr_eng_name4: g(71),
+            seln2_mbcr_eng_name5: g(72),
+            byov_mbcr_eng_name1: g(73),
+            byov_mbcr_eng_name2: g(74),
+            byov_mbcr_eng_name3: g(75),
+            byov_mbcr_eng_name4: g(76),
+            byov_mbcr_eng_name5: g(77),
         }),
         other => return Err(KisError::Decode(format!("unsupported tr_id {other}"))),
     })
@@ -512,6 +780,100 @@ mod tests {
         let raw = format!("0|H0STCNT0|002|{body}");
         let recs = decode_frame(&raw, None).unwrap();
         assert_eq!(recs.len(), 2, "다건 프레임은 건수만큼 이벤트");
+    }
+
+    #[test]
+    fn nxt_asking_has_mid_price_tail() {
+        // NXT 호가 65필드 — idx59~64 중간가 채워짐.
+        let body: String = (0..65).map(|i| i.to_string()).collect::<Vec<_>>().join("^");
+        let raw = format!("0|H0NXASP0|001|{body}");
+        let recs = decode_frame(&raw, None).unwrap();
+        match &recs[0] {
+            DecodedRecord::StockAsking(a) => {
+                assert_eq!(a.kmid_prc, "59");
+                assert_eq!(a.nmid_cls_code, "64");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn krx_asking_mid_price_tail_is_empty() {
+        // KRX 호가 59필드 — 중간가 필드 없음 → 안전 getter가 빈 String (OOB 패닉 없음).
+        let body: String = (0..59).map(|i| i.to_string()).collect::<Vec<_>>().join("^");
+        let raw = format!("0|H0STASP0|001|{body}");
+        let recs = decode_frame(&raw, None).unwrap();
+        match &recs[0] {
+            DecodedRecord::StockAsking(a) => {
+                assert_eq!(a.stck_bsop_cls_code, "58");
+                assert!(a.kmid_prc.is_empty());
+                assert!(a.nmid_cls_code.is_empty());
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn unified_market_op_drops_symbol_offset() {
+        // 통합 장운영 10필드 — 종목코드 없이 trht_yn부터 시작.
+        let body: String = (0..10).map(|i| i.to_string()).collect::<Vec<_>>().join("^");
+        let raw = format!("0|H0UNMKO0|001|{body}");
+        let recs = decode_frame(&raw, None).unwrap();
+        match &recs[0] {
+            DecodedRecord::MarketOperation(m) => {
+                assert!(m.mksc_shrn_iscd.is_empty(), "통합은 종목코드 없음");
+                assert_eq!(m.trht_yn, "0", "idx0이 trht_yn으로 당겨짐");
+                assert_eq!(m.exch_cls_code, "9");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn nxt_market_op_keeps_symbol() {
+        // NXT 장운영 11필드 — 종목코드 idx0 유지.
+        let body: String = (0..11).map(|i| i.to_string()).collect::<Vec<_>>().join("^");
+        let raw = format!("0|H0NXMKO0|001|{body}");
+        let recs = decode_frame(&raw, None).unwrap();
+        match &recs[0] {
+            DecodedRecord::MarketOperation(m) => {
+                assert_eq!(m.mksc_shrn_iscd, "0");
+                assert_eq!(m.trht_yn, "1");
+                assert_eq!(m.exch_cls_code, "10");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn anc_expected_conclusion_variant() {
+        // 예상체결 — 체결가와 동일 레이아웃, 별도 변형.
+        let body: String = (0..46).map(|i| i.to_string()).collect::<Vec<_>>().join("^");
+        let raw = format!("0|H0NXANC0|001|{body}");
+        let recs = decode_frame(&raw, None).unwrap();
+        assert!(matches!(recs[0], DecodedRecord::ExpectedConclusion(_)));
+    }
+
+    #[test]
+    fn nxt_trade_reuses_stock_trade() {
+        let body: String = (0..46).map(|i| i.to_string()).collect::<Vec<_>>().join("^");
+        let raw = format!("0|H0UNCNT0|001|{body}");
+        let recs = decode_frame(&raw, None).unwrap();
+        assert!(matches!(recs[0], DecodedRecord::StockTrade(_)));
+    }
+
+    #[test]
+    fn member_trade_78_fields() {
+        let body: String = (0..78).map(|i| i.to_string()).collect::<Vec<_>>().join("^");
+        let raw = format!("0|H0NXMBC0|001|{body}");
+        let recs = decode_frame(&raw, None).unwrap();
+        match &recs[0] {
+            DecodedRecord::MemberTrade(m) => {
+                assert_eq!(m.mksc_shrn_iscd, "0");
+                assert_eq!(m.byov_mbcr_eng_name5, "77");
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 
     #[test]

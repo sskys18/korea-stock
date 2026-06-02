@@ -1,7 +1,7 @@
 //! 모의투자 환경 통합 스모크 테스트.
 //! 실행: KIS_* 환경변수 설정 후 `cargo test --test integration -- --ignored`
 
-use kis_adapter::{KisClient, KisConfig};
+use kis_adapter::{Exchange, KisClient, KisConfig, Market};
 
 fn client() -> Option<KisClient> {
     let config = KisConfig::from_env().ok()?;
@@ -27,11 +27,14 @@ async fn token_and_current_price() {
     let client = client().expect("KIS_* env vars + valid config");
     let ds = client.domestic_stock();
     let price = ds
-        .current_price("005930")
+        .current_price("005930", Market::Krx)
         .await
         .expect("current price call");
     assert!(!price.stck_prpr.is_empty(), "현재가 비어있지 않음");
-    let again = ds.current_price("000660").await.expect("second call");
+    let again = ds
+        .current_price("000660", Market::Krx)
+        .await
+        .expect("second call");
     assert!(!again.stck_prpr.is_empty());
 }
 
@@ -40,7 +43,10 @@ async fn token_and_current_price() {
 async fn balance_query() {
     let client = client().expect("KIS_* env vars");
     let ds = client.domestic_stock();
-    let (_items, summary) = ds.balance_all().await.expect("balance call");
+    let (_items, summary) = ds
+        .balance_all(kis_adapter::domestic_stock::BalanceBasis::Default)
+        .await
+        .expect("balance call");
     assert!(!summary.is_empty(), "계좌 요약 1건 이상");
 }
 
@@ -81,7 +87,7 @@ async fn realtime_subscribe_one() {
     let mut events = rt.take_events().expect("events");
 
     let _handle = rt
-        .subscribe(SubscriptionKind::DomesticTrade, "005930")
+        .subscribe(SubscriptionKind::DomesticTrade(Market::Krx), "005930")
         .await
         .expect("subscribe");
 
@@ -108,7 +114,7 @@ async fn domestic_asking_price() {
     let client = client().expect("KIS_* env vars");
     let (asking, expected) = client
         .domestic_stock()
-        .asking_price("005930")
+        .asking_price("005930", Market::Krx)
         .await
         .expect("asking price call");
     assert!(!asking.askp1.is_empty() || !expected.antc_cnpr.is_empty());
@@ -121,7 +127,14 @@ async fn domestic_period_price() {
     let client = client().expect("KIS_* env vars");
     let (_summary, candles) = client
         .domestic_stock()
-        .period_price("005930", "20260401", "20260522", Period::Daily, true)
+        .period_price(
+            "005930",
+            "20260401",
+            "20260522",
+            Period::Daily,
+            true,
+            Market::Krx,
+        )
         .await
         .expect("period price call");
     assert!(!candles.is_empty(), "일봉 1건 이상");
@@ -133,7 +146,7 @@ async fn domestic_minute_chart() {
     let client = client().expect("KIS_* env vars");
     let (_summary, candles) = client
         .domestic_stock()
-        .minute_chart("005930", "100000", true)
+        .minute_chart("005930", "100000", true, Market::Krx)
         .await
         .expect("minute chart call");
     let _ = candles;
@@ -159,7 +172,7 @@ async fn domestic_daily_conclusions() {
     let client = client().expect("KIS_* env vars");
     let page = client
         .domestic_stock()
-        .daily_conclusions("20260401", "20260522", SellBuy::All, None)
+        .daily_conclusions("20260401", "20260522", SellBuy::All, None, Exchange::Krx)
         .await
         .expect("daily conclusions call");
     let _ = page.data;
@@ -287,4 +300,86 @@ async fn futureoption_buyable() {
         .buyable("101W09", SellBuy::Buy, 300.0, "01")
         .await;
     assert_wire_ok(r, "futureoption buyable");
+}
+
+// 실주문 사이클 — 미체결 보장(-10% 지정가) → revise(-15%) → cancel.
+// 가드: `KIS_LIVE_ORDER_TEST=1` 필수. 시장 시간 내(09:00~15:25 KST) 실행.
+// 비용: 미체결이므로 체결 수수료 0원. 주문 자체는 KIS 무료.
+// 종목: KODEX 200 (069500). 호가단위 5원(5000원 이상).
+#[tokio::test]
+#[ignore = "live order — set KIS_LIVE_ORDER_TEST=1, market hours only"]
+async fn live_order_unfilled_cycle() {
+    if std::env::var("KIS_LIVE_ORDER_TEST").as_deref() != Ok("1") {
+        panic!("set KIS_LIVE_ORDER_TEST=1 to enable live order test");
+    }
+    use kis_adapter::domestic_stock::{OrderReq, OrderType, ReviseCancelReq};
+
+    let client = client().expect("KIS_* env vars");
+    let stock = "069500"; // KODEX 200
+
+    // 1. 현재가
+    let q = client
+        .domestic_stock()
+        .current_price(stock, Market::Krx)
+        .await
+        .expect("current price");
+    let cur: u64 = q.stck_prpr.trim().parse().expect("price parse");
+    assert!(cur > 5000, "tick size assumption: 5원 단위 종목");
+
+    // 호가단위 5원 정렬
+    let round5 = |p: u64| (p / 5) * 5;
+    let bid_far = round5((cur as f64 * 0.90) as u64);
+    let bid_lower = round5((cur as f64 * 0.85) as u64);
+    eprintln!("CUR={cur} FAR={bid_far} LOWER={bid_lower}");
+
+    // 2. 매수 (미체결 보장)
+    let buy = client
+        .domestic_stock()
+        .buy(OrderReq::new(
+            stock,
+            OrderType::Limit,
+            1,
+            bid_far,
+        ))
+        .await
+        .expect("buy order");
+    eprintln!(
+        "BUY: orgno={} odno={} t={}",
+        buy.krx_fwdg_ord_orgno, buy.odno, buy.ord_tmd
+    );
+    assert!(!buy.odno.is_empty(), "주문번호 발급");
+
+    // 3. 정정 (-15%, 잔량)
+    let rev = client
+        .domestic_stock()
+        .revise(ReviseCancelReq {
+            krx_fwdg_ord_orgno: buy.krx_fwdg_ord_orgno.clone(),
+            orig_order_no: buy.odno.clone(),
+            order_type: OrderType::Limit,
+            quantity: 1,
+            price: bid_lower,
+            all: false,
+            exchange: Exchange::Krx,
+        })
+        .await
+        .expect("revise order");
+    eprintln!("REVISE: odno={}", rev.odno);
+    assert!(!rev.odno.is_empty(), "정정 주문번호");
+
+    // 4. 취소 — 정정 결과 odno 사용, 잔량 전부
+    let cancel = client
+        .domestic_stock()
+        .cancel(ReviseCancelReq {
+            krx_fwdg_ord_orgno: rev.krx_fwdg_ord_orgno.clone(),
+            orig_order_no: rev.odno.clone(),
+            order_type: OrderType::Limit,
+            quantity: 1,
+            price: bid_lower,
+            all: true,
+            exchange: Exchange::Krx,
+        })
+        .await
+        .expect("cancel order");
+    eprintln!("CANCEL: odno={}", cancel.odno);
+    assert!(!cancel.odno.is_empty(), "취소 주문번호");
 }

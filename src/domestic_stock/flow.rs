@@ -8,7 +8,7 @@
 use serde::Deserialize;
 
 use crate::client::{ApiCall, KisResponse};
-use crate::domestic_stock::DomesticStock;
+use crate::domestic_stock::{DomesticStock, Market};
 use crate::error::Result;
 use crate::trid::TrId;
 
@@ -225,6 +225,7 @@ impl DomesticStock<'_> {
         stock_code: &str,
         date: &str,
         cont: bool,
+        market: Market,
     ) -> Result<KisResponse<(InvestorTrendSummary, Vec<InvestorTrendDay>)>> {
         let env = self.client.config().environment;
         let resp = self
@@ -236,7 +237,7 @@ impl DomesticStock<'_> {
                 // 연속조회는 헤더 tr_cont="N"만 사용(ctx_area 없음). 샘플 기준.
                 tr_cont: cont.then(|| "N".to_string()),
                 params: serde_json::json!({
-                    "FID_COND_MRKT_DIV_CODE": "J",
+                    "FID_COND_MRKT_DIV_CODE": market.fid_code(),
                     "FID_INPUT_ISCD": stock_code,
                     "FID_INPUT_DATE_1": date,
                     "FID_ORG_ADJ_PRC": "",
@@ -259,13 +260,16 @@ impl DomesticStock<'_> {
         &self,
         stock_code: &str,
         date: &str,
+        market: Market,
     ) -> Result<(InvestorTrendSummary, Vec<InvestorTrendDay>)> {
         const MAX_PAGES: usize = 100;
         let mut summary = InvestorTrendSummary::default();
         let mut days = Vec::new();
         let mut cont = false;
         for _ in 0..MAX_PAGES {
-            let page = self.investor_trend_daily(stock_code, date, cont).await?;
+            let page = self
+                .investor_trend_daily(stock_code, date, cont, market)
+                .await?;
             let has_next = page.has_next();
             let (s, mut d) = page.data;
             if !cont {
@@ -312,8 +316,9 @@ impl DomesticStock<'_> {
     /// 최근 30분 데이터, 다음조회 불가.
     pub async fn program_trade_today(
         &self,
-        market: MarketClass,
+        board: MarketClass,
         stock_code: Option<&str>,
+        market: Market,
     ) -> Result<Vec<ProgramTradeToday>> {
         let env = self.client.config().environment;
         let resp = self
@@ -324,8 +329,8 @@ impl DomesticStock<'_> {
                 tr_id: TR_PROGRAM_TODAY.resolve(env)?.into(),
                 tr_cont: None,
                 params: serde_json::json!({
-                    "FID_COND_MRKT_DIV_CODE": "J",
-                    "FID_MRKT_CLS_CODE": market.code(),
+                    "FID_COND_MRKT_DIV_CODE": market.fid_code(),
+                    "FID_MRKT_CLS_CODE": board.code(),
                     "FID_SCTN_CLS_CODE": "",
                     "FID_INPUT_ISCD": stock_code.unwrap_or(""),
                     "FID_COND_MRKT_DIV_CODE1": "",
@@ -343,9 +348,10 @@ impl DomesticStock<'_> {
     /// 시장 단위. `start`/`end` YYYYMMDD. 차익/비차익 순매수 누적.
     pub async fn program_trade_daily(
         &self,
-        market: MarketClass,
+        board: MarketClass,
         start: &str,
         end: &str,
+        market: Market,
     ) -> Result<Vec<ProgramTradeDaily>> {
         let env = self.client.config().environment;
         let resp = self
@@ -356,8 +362,8 @@ impl DomesticStock<'_> {
                 tr_id: TR_PROGRAM_DAILY.resolve(env)?.into(),
                 tr_cont: None,
                 params: serde_json::json!({
-                    "FID_COND_MRKT_DIV_CODE": "J",
-                    "FID_MRKT_CLS_CODE": market.code(),
+                    "FID_COND_MRKT_DIV_CODE": market.fid_code(),
+                    "FID_MRKT_CLS_CODE": board.code(),
                     "FID_INPUT_DATE_1": start,
                     "FID_INPUT_DATE_2": end,
                 }),

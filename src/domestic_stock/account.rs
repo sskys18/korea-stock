@@ -12,6 +12,32 @@ const TR_PSBL_ORDER: TrId = TrId::both("TTTC8908R", "VTTC8908R");
 const TR_DAILY_CCLD_RECENT: TrId = TrId::both("TTTC0081R", "VTTC0081R");
 const TR_DAILY_CCLD_OLD: TrId = TrId::both("CTSC9215R", "VTSC9215R");
 
+/// 잔고조회 시간외단일가·거래소 기준 (`AFHR_FLPR_YN`).
+///
+/// NXT 도입(2025-03)으로 `Nxt`(X) 추가 — 평가가격을 NXT 체결가 기준으로.
+/// 보유 종목 자체는 거래소 무관 동일(같은 ISIN/계좌)이며, 본 값은 **평가가격
+/// 기준**만 바꾼다(보유 목록을 거르지 않음).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BalanceBasis {
+    /// N — 기본(정규장 기준).
+    #[default]
+    Default,
+    /// Y — 시간외단일가 기준.
+    AfterHours,
+    /// X — NXT 기준.
+    Nxt,
+}
+
+impl BalanceBasis {
+    fn code(self) -> &'static str {
+        match self {
+            BalanceBasis::Default => "N",
+            BalanceBasis::AfterHours => "Y",
+            BalanceBasis::Nxt => "X",
+        }
+    }
+}
+
 /// 정정취소가능주문 1건 (TR5 output 배열 요소). 필드 전체는 §5 응답표.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -203,11 +229,12 @@ impl DomesticStock<'_> {
     pub async fn balance(
         &self,
         cursor: Option<(&str, &str)>,
+        basis: BalanceBasis,
     ) -> Result<KisResponse<(Vec<BalanceItem>, Vec<BalanceSummary>)>> {
         let env = self.client.config().environment;
         let (fk, nk) = cursor.unwrap_or(("", ""));
         let params = self.with_account(serde_json::json!({
-            "AFHR_FLPR_YN": "N",
+            "AFHR_FLPR_YN": basis.code(),
             "OFL_YN": "",
             "INQR_DVSN": "02",
             "UNPR_DVSN": "01",
@@ -235,13 +262,16 @@ impl DomesticStock<'_> {
     }
 
     /// 잔고 전체 페이지 수집.
-    pub async fn balance_all(&self) -> Result<(Vec<BalanceItem>, Vec<BalanceSummary>)> {
+    pub async fn balance_all(
+        &self,
+        basis: BalanceBasis,
+    ) -> Result<(Vec<BalanceItem>, Vec<BalanceSummary>)> {
         let mut items = Vec::new();
         let mut summary = Vec::new();
         let mut cursor: Option<(String, String)> = None;
         loop {
             let page = self
-                .balance(cursor.as_ref().map(|(f, n)| (f.as_str(), n.as_str())))
+                .balance(cursor.as_ref().map(|(f, n)| (f.as_str(), n.as_str())), basis)
                 .await?;
             let has_next = page.has_next();
             let next_cursor = match (page.ctx_area_fk.clone(), page.ctx_area_nk.clone()) {
@@ -301,6 +331,7 @@ impl DomesticStock<'_> {
         end: &str,
         sell_buy: SellBuy,
         cursor: Option<(&str, &str)>,
+        exchange: super::Exchange,
     ) -> Result<KisResponse<(Vec<DailyConclusion>, DailyConclusionSummary)>> {
         let env = self.client.config().environment;
         let (fk, nk) = cursor.unwrap_or(("", ""));
@@ -326,7 +357,7 @@ impl DomesticStock<'_> {
             "ORD_GNO_BRNO": "",
             "ODNO": "",
             "INQR_DVSN_1": "",
-            "EXCG_ID_DVSN_CD": "KRX",
+            "EXCG_ID_DVSN_CD": exchange.code(),
             "CTX_AREA_FK100": fk,
             "CTX_AREA_NK100": nk,
         }));

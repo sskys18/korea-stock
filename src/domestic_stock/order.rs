@@ -9,6 +9,35 @@ const TR_BUY: TrId = TrId::both("TTTC0012U", "VTTC0012U");
 const TR_SELL: TrId = TrId::both("TTTC0011U", "VTTC0011U");
 const TR_RVSECNCL: TrId = TrId::both("TTTC0013U", "VTTC0013U");
 
+/// 주문 거래소 구분 (`EXCG_ID_DVSN_CD`). NXT 대체거래소 도입(2025-03).
+///
+/// `Sor`(Smart Order Routing)는 KRX·NXT 최선집행 자동 라우팅 — 단일 거래소
+/// 지정 대신 권장. `All`은 조회 TR 전용(주문 불가).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Exchange {
+    /// 한국거래소.
+    #[default]
+    Krx,
+    /// 넥스트레이드(대체거래소).
+    Nxt,
+    /// 최선집행(SOR) — KRX/NXT 자동 라우팅.
+    Sor,
+    /// 전체 — 조회 TR 전용.
+    All,
+}
+
+impl Exchange {
+    /// `EXCG_ID_DVSN_CD` 코드 문자열.
+    pub fn code(self) -> &'static str {
+        match self {
+            Exchange::Krx => "KRX",
+            Exchange::Nxt => "NXT",
+            Exchange::Sor => "SOR",
+            Exchange::All => "ALL",
+        }
+    }
+}
+
 /// 주문 응답 (output). 매수/매도/정정/취소 공통.
 #[derive(Debug, Clone, Deserialize)]
 pub struct OrderResult {
@@ -55,8 +84,8 @@ pub struct OrderReq {
     pub quantity: u64,
     /// 주문단가. 시장가는 0.
     pub price: u64,
-    /// 거래소ID구분코드. 기본 "KRX".
-    pub exchange: String,
+    /// 거래소 구분. 기본 `Krx`. NXT/SOR 주문 시 변경.
+    pub exchange: Exchange,
 }
 
 impl OrderReq {
@@ -72,7 +101,7 @@ impl OrderReq {
             order_type,
             quantity,
             price,
-            exchange: "KRX".into(),
+            exchange: Exchange::Krx,
         }
     }
 }
@@ -91,7 +120,8 @@ pub struct ReviseCancelReq {
     pub price: u64,
     /// 잔량 전부 대상이면 true.
     pub all: bool,
-    pub exchange: String,
+    /// 거래소 구분. 원주문과 동일 거래소 지정.
+    pub exchange: Exchange,
 }
 
 impl DomesticStock<'_> {
@@ -112,7 +142,7 @@ impl DomesticStock<'_> {
             "ORD_DVSN": req.order_type.code(),
             "ORD_QTY": req.quantity.to_string(),
             "ORD_UNPR": req.price.to_string(),
-            "EXCG_ID_DVSN_CD": req.exchange,
+            "EXCG_ID_DVSN_CD": req.exchange.code(),
         }));
         let resp = self
             .client
@@ -149,7 +179,7 @@ impl DomesticStock<'_> {
             "ORD_QTY": req.quantity.to_string(),
             "ORD_UNPR": req.price.to_string(),
             "QTY_ALL_ORD_YN": if req.all { "Y" } else { "N" },
-            "EXCG_ID_DVSN_CD": req.exchange,
+            "EXCG_ID_DVSN_CD": req.exchange.code(),
         }));
         let resp = self
             .client

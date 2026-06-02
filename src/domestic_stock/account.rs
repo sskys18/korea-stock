@@ -408,3 +408,16 @@ impl DomesticStock<'_> {
         Ok(resp.envelope(items))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn balance_basis_codes() {
+        assert_eq!(BalanceBasis::Default.code(), "N");
+        assert_eq!(BalanceBasis::AfterHours.code(), "Y");
+        assert_eq!(BalanceBasis::Nxt.code(), "X");
+        assert_eq!(BalanceBasis::default(), BalanceBasis::Default);
+    }
+}

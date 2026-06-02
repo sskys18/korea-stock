@@ -66,3 +66,19 @@ impl<'a> DomesticStock<'a> {
         params
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn market_codes() {
+        assert_eq!(Market::Krx.fid_code(), "J");
+        assert_eq!(Market::Nxt.fid_code(), "NX");
+        assert_eq!(Market::Unified.fid_code(), "UN");
+        assert_eq!(Market::Krx.ws_infix(), "ST");
+        assert_eq!(Market::Nxt.ws_infix(), "NX");
+        assert_eq!(Market::Unified.ws_infix(), "UN");
+        assert_eq!(Market::default(), Market::Krx);
+    }
+}

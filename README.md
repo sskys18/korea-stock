@@ -7,7 +7,8 @@
 ## 특징
 
 - **4개 도메인 31개 타입 TR** — 요청·응답이 모두 타입 struct
-- **실시간 WebSocket** — 체결가·호가·체결통보, AES-256-CBC 복호화 자동
+- **실시간 WebSocket** — 체결가·호가·예상체결·장운영·회원사·프로그램매매·체결통보, AES-256-CBC 복호화 자동
+- **NXT·통합시세** — KRX/NXT(넥스트레이드)/통합 거래소 선택(시세·주문·실시간)
 - **실전/모의투자** — `KIS_ENV`로 런타임 분기, TR ID 자동 매핑
 - **토큰 자동 관리** — 발급·파일 캐싱·만료 갱신
 - **레이트리밋 + 재시도** — 토큰버킷, `EGW00201`(초당 거래건수 초과) 지수 백오프
@@ -59,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | 국내주식 | `client.domestic_stock()` | 시세·호가·기간/분봉, 매수/매도/정정/취소, 잔고·매수가능·일별체결·정정취소가능 (12) |
 | 해외주식 | `client.overseas_stock()` | 현재가·기간시세, 매수/매도/정정취소, 잔고·미체결·체결내역 (8) |
 | 국내선물옵션 | `client.futureoption()` | 현재가·호가, 주문/정정취소, 잔고·체결내역·주문가능 (7) |
-| 실시간 WS | `client.realtime()` | 국내체결가·국내호가·체결통보·해외체결가 (4) |
+| 실시간 WS | `client.realtime()` | 국내 6종(체결가·호가·예상체결·장운영·회원사·프로그램) × KRX/NXT/통합, 체결통보, 해외체결가 |
 
 ```rust
 use kis_adapter::overseas_stock::OverseasExchange;
@@ -130,7 +131,9 @@ cargo test                                    # 단위 19건
 cargo test --test integration -- --ignored    # 통합 19건 — 자격증명 필요
 ```
 
-통합 테스트는 `KIS_*` 환경변수가 있어야 실행되며 모두 **조회 전용**(주문 없음)이다.
+통합 테스트는 `KIS_*` 환경변수가 있어야 실행된다. 대부분 **조회 전용**(주문 없음)이며,
+예외로 `live_order_unfilled_cycle`은 `KIS_LIVE_ORDER_TEST=1` 가드 + 장중에만 실행되는
+실주문(미체결 매수→정정→취소) 사이클이다. 중간 실패 시 원주문을 best-effort 취소한다.
 
 ## 검증 상태
 

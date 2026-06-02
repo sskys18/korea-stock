@@ -349,8 +349,26 @@ async fn live_order_unfilled_cycle() {
     );
     assert!(!buy.odno.is_empty(), "주문번호 발급");
 
-    // 3. 정정 (-15%, 잔량)
-    let rev = client
+    // 원 매수주문 잔량 전부 취소 — 실주문 누수 방지용 best-effort 정리.
+    // (orgno, odno)로 잔량 전량 취소. 정정/취소 단계 어디서 실패해도 호출 가능.
+    let cleanup_cancel = |orgno: String, odno: String| {
+        let ds = client.domestic_stock();
+        async move {
+            ds.cancel(ReviseCancelReq {
+                krx_fwdg_ord_orgno: orgno,
+                orig_order_no: odno,
+                order_type: OrderType::Limit,
+                quantity: 1,
+                price: bid_lower,
+                all: true,
+                exchange: Exchange::Krx,
+            })
+            .await
+        }
+    };
+
+    // 3. 정정 (-15%, 잔량). 실패 시 원 매수주문을 반드시 취소 후 패닉.
+    let rev = match client
         .domestic_stock()
         .revise(ReviseCancelReq {
             krx_fwdg_ord_orgno: buy.krx_fwdg_ord_orgno.clone(),
@@ -362,12 +380,18 @@ async fn live_order_unfilled_cycle() {
             exchange: Exchange::Krx,
         })
         .await
-        .expect("revise order");
+    {
+        Ok(r) => r,
+        Err(e) => {
+            let c = cleanup_cancel(buy.krx_fwdg_ord_orgno.clone(), buy.odno.clone()).await;
+            panic!("revise 실패 — 원 매수주문 취소 시도({c:?}): {e}");
+        }
+    };
     eprintln!("REVISE: odno={}", rev.odno);
     assert!(!rev.odno.is_empty(), "정정 주문번호");
 
-    // 4. 취소 — 정정 결과 odno 사용, 잔량 전부
-    let cancel = client
+    // 4. 취소 — 정정 결과 odno 사용, 잔량 전부. 실패해도 원주문 취소 재시도.
+    let cancel = match client
         .domestic_stock()
         .cancel(ReviseCancelReq {
             krx_fwdg_ord_orgno: rev.krx_fwdg_ord_orgno.clone(),
@@ -379,7 +403,13 @@ async fn live_order_unfilled_cycle() {
             exchange: Exchange::Krx,
         })
         .await
-        .expect("cancel order");
+    {
+        Ok(c) => c,
+        Err(e) => {
+            let c = cleanup_cancel(rev.krx_fwdg_ord_orgno.clone(), rev.odno.clone()).await;
+            panic!("cancel 실패 — 잔량 취소 재시도({c:?}): {e}");
+        }
+    };
     eprintln!("CANCEL: odno={}", cancel.odno);
     assert!(!cancel.odno.is_empty(), "취소 주문번호");
 }

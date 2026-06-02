@@ -196,3 +196,23 @@ impl DomesticStock<'_> {
         resp.field("output")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exchange_codes() {
+        assert_eq!(Exchange::Krx.code(), "KRX");
+        assert_eq!(Exchange::Nxt.code(), "NXT");
+        assert_eq!(Exchange::Sor.code(), "SOR");
+        assert_eq!(Exchange::All.code(), "ALL");
+        assert_eq!(Exchange::default(), Exchange::Krx);
+    }
+
+    #[test]
+    fn order_req_default_exchange_is_krx() {
+        let req = OrderReq::new("005930", OrderType::Limit, 1, 70000);
+        assert_eq!(req.exchange, Exchange::Krx);
+    }
+}

@@ -1,7 +1,7 @@
 //! 현재가 조회 예제. 실행: KIS_* 환경변수 설정 후
-//! `cargo run --example domestic_quote -- 005930`
+//! `cargo run --example kis_domestic_quote -- 005930`
 
-use kis_adapter::{KisClient, KisConfig, Market};
+use korea_stock::{KisClient, KisConfig, Market};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

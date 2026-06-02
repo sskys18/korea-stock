@@ -1,9 +1,9 @@
 //! 실시간 체결가 구독 예제.
 //! 실행: KIS_* 환경변수 설정 후
-//! `cargo run --example realtime_feed -- 005930 000660`
+//! `cargo run --example kis_realtime_feed -- 005930 000660`
 //! (인자 없으면 005930 기본. Ctrl-C로 종료.)
 
-use kis_adapter::{KisClient, KisConfig, Market, RealtimeEvent, SubscriptionKind};
+use korea_stock::{KisClient, KisConfig, Market, RealtimeEvent, SubscriptionKind};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

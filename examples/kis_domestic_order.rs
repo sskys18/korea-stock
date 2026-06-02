@@ -1,11 +1,11 @@
 //! 잔고 + 매수가능 조회 예제 (주문은 실행 안 함 — 안전).
-//! 실행: `cargo run --example domestic_order`
+//! 실행: `cargo run --example kis_domestic_order`
 //!
 //! 실제 주문 호출에서 hashkey 관련 KIS 오류가 나면 `KisConfig.use_hashkey = true`로
 //! 설정한 클라이언트로 재시도한다.
 
-use kis_adapter::kis::domestic_stock::{BalanceBasis, OrderType};
-use kis_adapter::{KisClient, KisConfig};
+use korea_stock::kis::domestic_stock::{BalanceBasis, OrderType};
+use korea_stock::{KisClient, KisConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

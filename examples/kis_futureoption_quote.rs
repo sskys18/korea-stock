@@ -1,8 +1,8 @@
 //! 선물옵션 현재가 + 호가 예제.
-//! 실행: `cargo run --example futureoption_quote -- 101W09`
+//! 실행: `cargo run --example kis_futureoption_quote -- 101W09`
 
-use kis_adapter::kis::futureoption::MarketDiv;
-use kis_adapter::{KisClient, KisConfig};
+use korea_stock::kis::futureoption::MarketDiv;
+use korea_stock::{KisClient, KisConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

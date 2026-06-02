@@ -33,16 +33,22 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"
 tracing-subscriber = "0.3"
 
 [[example]]
-name = "domestic_quote"
+name = "kis_domestic_quote"
 
 [[example]]
-name = "domestic_order"
+name = "kis_domestic_order"
 
 [[example]]
-name = "overseas_quote"
+name = "kis_overseas_quote"
 
 [[example]]
-name = "futureoption_quote"
+name = "kis_futureoption_quote"
 
 [[example]]
-name = "realtime_feed"
+name = "kis_realtime_feed"
+
+[[example]]
+name = "toss_quote"
+
+[[example]]
+name = "toss_order"

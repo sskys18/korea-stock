@@ -1,9 +1,9 @@
 //! 해외주식 현재가 + 기간시세 예제.
 //! 실행: KIS_* 환경변수 설정 후
-//! `cargo run --example overseas_quote -- AAPL`
+//! `cargo run --example kis_overseas_quote -- AAPL`
 
-use kis_adapter::kis::overseas_stock::{OverseasExchange, OverseasPeriod};
-use kis_adapter::{KisClient, KisConfig};
+use korea_stock::kis::overseas_stock::{OverseasExchange, OverseasPeriod};
+use korea_stock::{KisClient, KisConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

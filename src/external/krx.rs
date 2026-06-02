@@ -14,10 +14,10 @@
 //! - 개별종목 공매도 잔고: `dbms/MDC/STAT/srt/MDCSTAT30502`, 응답 키 `OutBlock_1`.
 //! - 외국인 보유량 개별추이: `dbms/MDC/STAT/standard/MDCSTAT03702`, 응답 키 `output`.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use serde::Deserialize;
+use tokio::sync::Mutex;
 
 use crate::error::{KisError, Result};
 
@@ -39,8 +39,10 @@ pub struct KrxClient {
     http: reqwest::Client,
     login_id: String,
     login_pw: String,
-    /// 로그인 세션 보유 여부. `LOGOUT` 감지 시 해제 후 재로그인.
-    authed: AtomicBool,
+    /// 세션 세대. 0=미로그인. 로그인 직렬화 + 동시 재로그인 방지용.
+    /// 한 태스크가 `LOGOUT`을 만나면 자신이 본 세대와 비교해, 다른 태스크가
+    /// 이미 갱신했으면 그 세션을 재사용하고 중복 로그인하지 않는다.
+    generation: Mutex<u64>,
 }
 
 impl KrxClient {
@@ -55,7 +57,7 @@ impl KrxClient {
             http,
             login_id: login_id.into(),
             login_pw: login_pw.into(),
-            authed: AtomicBool::new(false),
+            generation: Mutex::new(0),
         })
     }
 
@@ -124,14 +126,27 @@ impl KrxClient {
                 "KRX login failed: code={code} msg={msg}"
             )));
         }
-        self.authed.store(true, Ordering::Release);
         Ok(())
     }
 
-    /// 미인증 시 로그인.
-    async fn ensure_login(&self) -> Result<()> {
-        if !self.authed.load(Ordering::Acquire) {
+    /// 미로그인 시 로그인(직렬화). 호출 시점의 세션 세대를 반환.
+    /// 잠금을 로그인 네트워크 호출 동안 유지 → 동시 호출은 단일 로그인 공유.
+    async fn ensure_login(&self) -> Result<u64> {
+        let mut g = self.generation.lock().await;
+        if *g == 0 {
             self.login().await?;
+            *g = 1;
+        }
+        Ok(*g)
+    }
+
+    /// `LOGOUT` 후 재로그인 — 단, 본 세대(`seen_gen`)가 그대로일 때만.
+    /// 다른 태스크가 이미 갱신(세대 증가)했으면 그 세션을 재사용(중복 로그인 회피).
+    async fn relogin_if_stale(&self, seen_gen: u64) -> Result<()> {
+        let mut g = self.generation.lock().await;
+        if *g == seen_gen {
+            self.login().await?;
+            *g += 1;
         }
         Ok(())
     }
@@ -158,12 +173,11 @@ impl KrxClient {
         extra: &[(&str, &str)],
         result_key: &str,
     ) -> Result<T> {
-        self.ensure_login().await?;
+        let cur_gen = self.ensure_login().await?;
         let mut text = self.post_json(bld, extra).await?;
         if text.trim() == "LOGOUT" {
-            // 세션 만료 — 재로그인 후 1회 재시도.
-            self.authed.store(false, Ordering::Release);
-            self.ensure_login().await?;
+            // 세션 만료 — 본 세대 기준 재로그인(중복 방지) 후 1회 재시도.
+            self.relogin_if_stale(cur_gen).await?;
             text = self.post_json(bld, extra).await?;
         }
         if text.trim() == "LOGOUT" {

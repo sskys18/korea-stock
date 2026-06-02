@@ -22,8 +22,11 @@ cbc = { version = "0.1", features = ["alloc", "block-padding"] }
 base64 = "0.22"
 
 [features]
-# 외부 소스(KRX MDC·OpenDART) 클라이언트. KRX 로그인 세션용 reqwest cookie_store 활성화.
-external = ["reqwest/cookies"]
+# 외부 소스(KRX MDC·OpenDART) 클라이언트.
+# - cookies: KRX 로그인 세션.
+# - native-tls: OpenDART(opendart.fss.or.kr)가 RSA-kx 전용 TLS1.2(AES128-GCM-SHA256)만
+#   제공 → rustls가 핸드셰이크 거부. DART 클라이언트만 native-tls 백엔드 사용.
+external = ["reqwest/cookies", "reqwest/native-tls"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "signal"] }

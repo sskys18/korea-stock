@@ -25,12 +25,16 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ## 빠른 시작
 
 ```rust
-use kis_adapter::{KisClient, KisConfig};
+use kis_adapter::{KisClient, KisConfig, Market};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = KisClient::new(KisConfig::from_env()?)?;
-    let price = client.domestic_stock().current_price("005930").await?;
+    // Market::Krx / Nxt / Unified(통합시세) 선택
+    let price = client
+        .domestic_stock()
+        .current_price("005930", Market::Krx)
+        .await?;
     println!("삼성전자 현재가: {}", price.stck_prpr);
     Ok(())
 }
@@ -70,7 +74,7 @@ println!("{}", aapl.last);
 ### 실시간 WebSocket
 
 ```rust
-use kis_adapter::{KisClient, KisConfig, RealtimeEvent, SubscriptionKind};
+use kis_adapter::{KisClient, KisConfig, Market, RealtimeEvent, SubscriptionKind};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -79,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut events = rt.take_events().unwrap();
 
     let _handle = rt
-        .subscribe(SubscriptionKind::DomesticTrade, "005930")
+        .subscribe(SubscriptionKind::DomesticTrade(Market::Krx), "005930")
         .await?;
 
     while let Some(ev) = events.recv().await {

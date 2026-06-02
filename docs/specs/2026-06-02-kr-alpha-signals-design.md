@@ -98,6 +98,9 @@ TR 13~ 로 추가. 검증 불가 항목은 `[미확인]` 명시 후 해당 메�
   - bld `dbms/MDC/STAT/standard/MDCSTAT03702`, 응답 `output`.
 - `DartClient::disclosures(corp_code, bgn_de, end_de)` — 전자공시(KIS 부재).
   - OpenDART `list.json`, 자체 `crtfc_key`. 필드는 공식 명세.
+  - **전송 특이사항(와이어 검증서 발견):** opendart는 RSA-kx 전용 TLS1.2(AES128-GCM-SHA256)만
+    제공 → rustls 핸드셰이크 거부. DART 클라이언트만 **native-tls** 백엔드 사용.
+    또한 UA 없는 요청을 error 페이지로 리다이렉트 → UA 지정 + redirect none.
 
 `ExternalConfig { dart_api_key: Option<String> }`. `KisError::External(String)` variant 추가.
 **추가 의존성 없음** — reqwest `.form()`/`.query()` 재사용(원안의 `urlencoding` 불요).
@@ -133,9 +136,11 @@ KRX 장기간 백테스트(2년 초과)만 분할 호출 필요 — 호출자 �
 
 - **P1 완료**: `flow.rs` — investor_trend_daily(+_all 연속), investor_trend_estimate,
   program_trade_today/daily, short_sale_daily. TR 13~17 문서화. 단위테스트(serde 내성) 통과.
-- **P2 완료**: `external/` (feature gated) — KrxClient(short_balance, foreign_holding) +
-  KRX 폼 로그인 세션 트랜스포트(cookie_store, LOGOUT 시 재로그인), DartClient(disclosures).
-  컴파일·serde·clippy 통과. 라이브 와이어는 `--ignored` 테스트(KRX_ID/KRX_PW·DART_API_KEY)로 검증.
+- **P2 완료 + 와이어 검증**: `external/` (feature gated) — KrxClient(short_balance,
+  foreign_holding) + KRX 폼 로그인 세션(cookie_store, 세대 Mutex 동시성), DartClient(disclosures,
+  native-tls). **라이브 3종 모두 실측 통과**(KRX_ID/KRX_PW·DART_API_KEY, 삼성전자 기준).
+  와이어 검증서 전송 버그 2건 발견·수정: opendart RSA-kx TLS(native-tls), WAF UA 리다이렉트.
+  회귀 게이트: `cargo test --features external -- --ignored`. 컴파일·serde·clippy 통과.
 - **realtime 체결강도**: 기존 코드에 이미 노출 — 무변경.
 - 검증: `cargo test`(28 통과) + `cargo clippy`(external on/off 모두 clean).
 - 후속(미구현): inquire_investor_daily_by_market 등 추가 KIS-native 래핑, DART financials,

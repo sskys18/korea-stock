@@ -330,4 +330,20 @@ mod tests {
         assert!(!rows[0].date.is_empty(), "row date populated");
         assert!(!rows[0].balance_qty.is_empty(), "balance_qty populated");
     }
+
+    #[tokio::test]
+    #[ignore = "requires KRX_ID/KRX_PW + network"]
+    async fn krx_live_foreign_holding() {
+        let krx = KrxClient::from_env().expect("set KRX_ID/KRX_PW");
+        let rows = krx
+            .foreign_holding("20240102", "20240110", "KR7005930003")
+            .await
+            .expect("foreign_holding call");
+        assert!(!rows.is_empty(), "expected non-empty foreign holding rows");
+        assert!(!rows[0].date.is_empty(), "row date populated");
+        assert!(
+            !rows[0].foreign_ratio.is_empty(),
+            "foreign_ratio populated"
+        );
+    }
 }

@@ -3,8 +3,10 @@
 //! 공시검색 `list.json`. 자체 인증키(`crtfc_key`) 필요 — KIS 토큰과 무관.
 //! 응답 필드는 OpenDART 공식 명세(공시검색 API) 기준.
 //!
-//! **와이어 미검증** — 컴파일·`#[serde(default)]` 내성까지만 보장. 실사용 시
-//! 유효한 `crtfc_key`로 런타임 검증 필요.
+//! ## 전송 특이사항
+//! opendart.fss.or.kr는 RSA-kx 전용 TLS1.2(AES128-GCM-SHA256)만 제공 → rustls 거부.
+//! 이 클라이언트만 **native-tls** 백엔드 사용. UA 없는 요청은 error 페이지로 리다이렉트하므로
+//! UA 지정 + redirect none. 라이브 와이어 검증 완료(`--ignored dart_live`).
 
 use serde::Deserialize;
 
@@ -19,11 +21,19 @@ pub struct DartClient {
 }
 
 impl DartClient {
-    pub fn new(api_key: impl Into<String>) -> Self {
-        Self {
-            http: reqwest::Client::new(),
+    /// 생성. OpenDART는 RSA-kx 전용 TLS1.2만 제공해 rustls가 거부 → native-tls 백엔드 사용.
+    pub fn new(api_key: impl Into<String>) -> Result<Self> {
+        let http = reqwest::Client::builder()
+            .use_native_tls()
+            // opendart WAF는 UA 없는 요청을 error 페이지로 리다이렉트 → UA 지정.
+            .user_agent("Mozilla/5.0 (compatible; kis-adapter)")
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(std::time::Duration::from_secs(15))
+            .build()?;
+        Ok(Self {
+            http,
             api_key: api_key.into(),
-        }
+        })
     }
 
     /// 공시검색 — `list.json`.
@@ -129,5 +139,23 @@ mod tests {
         assert_eq!(list.status, "000");
         assert_eq!(list.total_count, 2);
         assert_eq!(list.list.len(), 1);
+    }
+
+    // 실거래 와이어 검증 — DART_API_KEY + 네트워크 필요.
+    //   cargo test --features external -- --ignored dart_live
+    #[tokio::test]
+    #[ignore = "requires DART_API_KEY + network"]
+    async fn dart_live_disclosures() {
+        let key = std::env::var("DART_API_KEY").expect("set DART_API_KEY");
+        let dart = DartClient::new(key).expect("dart client");
+        // 삼성전자 corp_code(00126380), 짧은 구간.
+        let list = dart
+            .disclosures(Some("00126380"), "20240102", "20240131")
+            .await
+            .expect("disclosures call");
+        assert_eq!(list.status, "000");
+        assert!(list.total_count > 0, "expected some disclosures");
+        assert!(!list.list.is_empty(), "list populated");
+        assert!(!list.list[0].rcept_no.is_empty(), "rcept_no populated");
     }
 }

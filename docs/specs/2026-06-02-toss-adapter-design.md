@@ -140,8 +140,8 @@ src/toss/
 └── order_info.rs    # buying-power, sellable-quantity, commissions
 ```
 
-`src/ratelimit.rs`·`src/error.rs`는 **재사용 판단 결과**: ratelimit은 선택적 캡으로만 재사용(§3.4),
-error는 재사용하지 않고 병렬 신설(§3.3).
+`src/ratelimit.rs`(크레이트 루트, 브로커 공유)·`src/kis/error.rs`는 **재사용 판단 결과**:
+ratelimit은 선택적 캡으로만 재사용(§3.4), error는 재사용하지 않고 병렬 신설(§3.3).
 
 ### 5.2 핵심 타입
 

@@ -2,7 +2,7 @@
 //! 실행: KIS_* 환경변수 설정 후
 //! `cargo run --example overseas_quote -- AAPL`
 
-use kis_adapter::overseas_stock::{OverseasExchange, OverseasPeriod};
+use kis_adapter::kis::overseas_stock::{OverseasExchange, OverseasPeriod};
 use kis_adapter::{KisClient, KisConfig};
 
 #[tokio::main]

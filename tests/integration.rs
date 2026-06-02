@@ -44,7 +44,7 @@ async fn balance_query() {
     let client = client().expect("KIS_* env vars");
     let ds = client.domestic_stock();
     let (_items, summary) = ds
-        .balance_all(kis_adapter::domestic_stock::BalanceBasis::Default)
+        .balance_all(kis_adapter::kis::domestic_stock::BalanceBasis::Default)
         .await
         .expect("balance call");
     assert!(!summary.is_empty(), "계좌 요약 1건 이상");
@@ -58,7 +58,7 @@ async fn overseas_current_price() {
     let client = client().expect("KIS_* env vars");
     let os = client.overseas_stock();
     let price = os
-        .current_price(kis_adapter::overseas_stock::OverseasExchange::Nasd, "AAPL")
+        .current_price(kis_adapter::kis::overseas_stock::OverseasExchange::Nasd, "AAPL")
         .await
         .expect("overseas current price call");
     assert!(!price.last.is_empty(), "현재가 비어있지 않음");
@@ -70,7 +70,7 @@ async fn futureoption_current_price() {
     let client = client().expect("KIS_* env vars");
     let fo = client.futureoption();
     let (price, raw) = fo
-        .current_price(kis_adapter::futureoption::MarketDiv::IndexFuture, "101W09")
+        .current_price(kis_adapter::kis::futureoption::MarketDiv::IndexFuture, "101W09")
         .await
         .expect("futureoption current price call");
     assert!(raw.get("output1").is_some() || !price.futs_prpr.is_empty());
@@ -113,7 +113,7 @@ async fn realtime_subscribe_one() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn nxt_unified_support_audit() {
-    use kis_adapter::domestic_stock::{MarketClass, Period, RankBy};
+    use kis_adapter::kis::domestic_stock::{MarketClass, Period, RankBy};
     let client = client().expect("KIS_* env vars");
     let ds = client.domestic_stock();
     fn rep<T>(name: &str, mkt: Market, r: kis_adapter::Result<T>) {
@@ -204,7 +204,7 @@ async fn domestic_asking_price() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn domestic_period_price() {
-    use kis_adapter::domestic_stock::Period;
+    use kis_adapter::kis::domestic_stock::Period;
     let client = client().expect("KIS_* env vars");
     let (_summary, candles) = client
         .domestic_stock()
@@ -236,7 +236,7 @@ async fn domestic_minute_chart() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn domestic_buyable() {
-    use kis_adapter::domestic_stock::OrderType;
+    use kis_adapter::kis::domestic_stock::OrderType;
     let client = client().expect("KIS_* env vars");
     let info = client
         .domestic_stock()
@@ -249,7 +249,7 @@ async fn domestic_buyable() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn domestic_daily_conclusions() {
-    use kis_adapter::domestic_stock::SellBuy;
+    use kis_adapter::kis::domestic_stock::SellBuy;
     let client = client().expect("KIS_* env vars");
     let page = client
         .domestic_stock()
@@ -262,7 +262,7 @@ async fn domestic_daily_conclusions() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn domestic_revisable_orders() {
-    use kis_adapter::domestic_stock::SellBuy;
+    use kis_adapter::kis::domestic_stock::SellBuy;
     let client = client().expect("KIS_* env vars");
     let page = client
         .domestic_stock()
@@ -275,7 +275,7 @@ async fn domestic_revisable_orders() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn overseas_balance() {
-    use kis_adapter::overseas_stock::OverseasExchange;
+    use kis_adapter::kis::overseas_stock::OverseasExchange;
     let client = client().expect("KIS_* env vars");
     let (_items, _summary) = client
         .overseas_stock()
@@ -287,7 +287,7 @@ async fn overseas_balance() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn overseas_period_price() {
-    use kis_adapter::overseas_stock::{OverseasExchange, OverseasPeriod};
+    use kis_adapter::kis::overseas_stock::{OverseasExchange, OverseasPeriod};
     let client = client().expect("KIS_* env vars");
     let page = client
         .overseas_stock()
@@ -307,7 +307,7 @@ async fn overseas_period_price() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn overseas_unfilled_orders() {
-    use kis_adapter::overseas_stock::OverseasExchange;
+    use kis_adapter::kis::overseas_stock::OverseasExchange;
     let client = client().expect("KIS_* env vars");
     let page = client
         .overseas_stock()
@@ -320,7 +320,7 @@ async fn overseas_unfilled_orders() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn overseas_conclusions() {
-    use kis_adapter::overseas_stock::{FilledFilter, OverseasSellBuy};
+    use kis_adapter::kis::overseas_stock::{FilledFilter, OverseasSellBuy};
     let client = client().expect("KIS_* env vars");
     let list = client
         .overseas_stock()
@@ -338,7 +338,7 @@ async fn overseas_conclusions() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn futureoption_asking_price() {
-    use kis_adapter::futureoption::MarketDiv;
+    use kis_adapter::kis::futureoption::MarketDiv;
     let client = client().expect("KIS_* env vars");
     let (_price, raw) = client
         .futureoption()
@@ -362,7 +362,7 @@ async fn futureoption_balance() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn futureoption_conclusions() {
-    use kis_adapter::futureoption::{CcnlFilter, CcnlSellBuy};
+    use kis_adapter::kis::futureoption::{CcnlFilter, CcnlSellBuy};
     let client = client().expect("KIS_* env vars");
     let r = client
         .futureoption()
@@ -374,7 +374,7 @@ async fn futureoption_conclusions() {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials"]
 async fn futureoption_buyable() {
-    use kis_adapter::futureoption::SellBuy;
+    use kis_adapter::kis::futureoption::SellBuy;
     let client = client().expect("KIS_* env vars");
     let r = client
         .futureoption()

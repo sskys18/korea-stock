@@ -1,26 +1,16 @@
-//! 한국투자증권(KIS) OpenAPI Rust 어댑터.
+//! 한국투자증권(KIS) + 토스증권(Toss) OpenAPI Rust 어댑터.
+//!
+//! 두 증권사 어댑터를 형제 모듈(`kis`, `toss`)로 제공하며, 브로커 비종속
+//! 레이트리미터(`ratelimit`)를 공유한다.
 
-mod auth;
-mod client;
-mod config;
-mod error;
-mod ratelimit;
-mod trid;
-
-pub mod domestic_stock;
-#[cfg(feature = "external")]
-pub mod external;
-pub mod futureoption;
-pub mod overseas_stock;
-pub mod realtime;
+pub mod kis;
 pub mod toss;
 
-pub use client::{KisClient, KisResponse, RawRequest};
-pub use config::{Environment, KisConfig};
-pub use domestic_stock::{Exchange, Market, RankBy};
-pub use error::{KisError, Result};
-pub use realtime::{
-    OrderNotice, OverseasTrade, RealtimeClient, RealtimeEvent, StockAsking, StockTrade,
-    SubscriptionHandle, SubscriptionKind,
+mod ratelimit;
+
+pub use kis::{
+    Environment, Exchange, KisClient, KisConfig, KisError, KisResponse, Market, OrderNotice,
+    OverseasTrade, RankBy, RawRequest, RealtimeClient, RealtimeEvent, Result, StockAsking,
+    StockTrade, SubscriptionHandle, SubscriptionKind,
 };
 pub use toss::{RawRequest as TossRawRequest, TossClient, TossConfig, TossError, TossResponse};

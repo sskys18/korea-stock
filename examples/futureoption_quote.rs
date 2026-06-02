@@ -1,7 +1,7 @@
 //! 선물옵션 현재가 + 호가 예제.
 //! 실행: `cargo run --example futureoption_quote -- 101W09`
 
-use kis_adapter::futureoption::MarketDiv;
+use kis_adapter::kis::futureoption::MarketDiv;
 use kis_adapter::{KisClient, KisConfig};
 
 #[tokio::main]

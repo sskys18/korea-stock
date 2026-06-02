@@ -90,7 +90,10 @@ TR 13~ 로 추가. 검증 불가 항목은 `[미확인]` 명시 후 해당 메�
 
 - `KrxClient::short_balance(start, end, isin)` — 공매도 **잔고**(KIS 부재).
   - KRX MDC `getJsonData.cmd` POST, bld `dbms/MDC/STAT/srt/MDCSTAT30502`, 응답 `OutBlock_1`.
-  - **OTP 불요** (원안 오류 정정 — OTP는 CSV 다운로드 전용). bld·컬럼은 pykrx 소스/cassette 기준.
+  - **인증(2024~ 변경):** KRX가 MDC를 회원 로그인 세션 뒤로 이동(미인증 시 `LOGOUT` 400).
+    무료 KRX 계정으로 폼 로그인(MDCCOMS001D1.cmd, CD001=정상/CD011=중복→skipDup) 후 쿠키 세션 조회.
+    OTP·crypto 아님 — pykrx `comm/auth.py` 역공학. `reqwest` cookie_store로 순수 Rust 구현.
+    `KrxClient::from_env`(`KRX_ID`/`KRX_PW`). bld·컬럼은 pykrx 소스/cassette 기준.
 - `KrxClient::foreign_holding(start, end, isin)` — 외국인 보유량 추이(프롬프트 원안 미해결분).
   - bld `dbms/MDC/STAT/standard/MDCSTAT03702`, 응답 `output`.
 - `DartClient::disclosures(corp_code, bgn_de, end_de)` — 전자공시(KIS 부재).
@@ -130,8 +133,9 @@ KRX 장기간 백테스트(2년 초과)만 분할 호출 필요 — 호출자 �
 
 - **P1 완료**: `flow.rs` — investor_trend_daily(+_all 연속), investor_trend_estimate,
   program_trade_today/daily, short_sale_daily. TR 13~17 문서화. 단위테스트(serde 내성) 통과.
-- **P2 완료**: `external/` (feature gated) — KrxClient(short_balance, foreign_holding),
-  DartClient(disclosures). 컴파일·serde 내성 통과, **와이어 미검증**.
+- **P2 완료**: `external/` (feature gated) — KrxClient(short_balance, foreign_holding) +
+  KRX 폼 로그인 세션 트랜스포트(cookie_store, LOGOUT 시 재로그인), DartClient(disclosures).
+  컴파일·serde·clippy 통과. 라이브 와이어는 `--ignored` 테스트(KRX_ID/KRX_PW·DART_API_KEY)로 검증.
 - **realtime 체결강도**: 기존 코드에 이미 노출 — 무변경.
 - 검증: `cargo test`(28 통과) + `cargo clippy`(external on/off 모두 clean).
 - 후속(미구현): inquire_investor_daily_by_market 등 추가 KIS-native 래핑, DART financials,

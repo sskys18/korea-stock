@@ -743,6 +743,7 @@
 | API명 | 종목별 투자자매매동향(일별) / Investor Trade By Stock Daily |
 | HTTP | `GET /uapi/domestic-stock/v1/quotations/investor-trade-by-stock-daily` |
 | tr_id | `FHPTJ04160001` (실전·모의 동일 가정) |
+| 연속조회 | 지원 — 헤더 `tr_cont` `M`/`F`면 다음 페이지(ctx_area 없는 헤더 전용). 어댑터 `investor_trend_daily_all`이 수집. |
 | 출처 | open-trading-api `examples_llm/domestic_stock/investor_trade_by_stock_daily` |
 
 ### 요청 필드 (Query)

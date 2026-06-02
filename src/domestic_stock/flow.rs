@@ -7,7 +7,7 @@
 
 use serde::Deserialize;
 
-use crate::client::ApiCall;
+use crate::client::{ApiCall, KisResponse};
 use crate::domestic_stock::DomesticStock;
 use crate::error::Result;
 use crate::trid::TrId;
@@ -144,15 +144,19 @@ pub struct InvestorTrendEstimate {
 }
 
 impl DomesticStock<'_> {
-    /// 종목별 투자자매매동향(일별) — TR 13 `FHPTJ04160001`.
+    /// 종목별 투자자매매동향(일별) 한 페이지 — TR 13 `FHPTJ04160001`.
     ///
-    /// `date`: 기준일(YYYYMMDD). (요약, 일별배열) 반환.
+    /// `date`: 기준일(YYYYMMDD). `cont=true`면 직전 호출에 이은 연속조회(헤더 `tr_cont=N`).
+    /// envelope의 `data`는 (요약 output1, 일별배열 output2). `has_next()`로 다음 페이지 판단.
+    /// 전체 history는 [`investor_trend_daily_all`]을 사용.
+    ///
     /// 외국인/기관/개인 일별 순매수 누적 — 클래식 KR 알파.
     pub async fn investor_trend_daily(
         &self,
         stock_code: &str,
         date: &str,
-    ) -> Result<(InvestorTrendSummary, Vec<InvestorTrendDay>)> {
+        cont: bool,
+    ) -> Result<KisResponse<(InvestorTrendSummary, Vec<InvestorTrendDay>)>> {
         let env = self.client.config().environment;
         let resp = self
             .client
@@ -160,7 +164,8 @@ impl DomesticStock<'_> {
                 method: reqwest::Method::GET,
                 path: "/uapi/domestic-stock/v1/quotations/investor-trade-by-stock-daily".into(),
                 tr_id: TR_INVESTOR_DAILY.resolve(env)?.into(),
-                tr_cont: None,
+                // 연속조회는 헤더 tr_cont="N"만 사용(ctx_area 없음). 샘플 기준.
+                tr_cont: cont.then(|| "N".to_string()),
                 params: serde_json::json!({
                     "FID_COND_MRKT_DIV_CODE": "J",
                     "FID_INPUT_ISCD": stock_code,
@@ -172,7 +177,39 @@ impl DomesticStock<'_> {
                 needs_hashkey: false,
             })
             .await?;
-        Ok((resp.field("output1")?, resp.field("output2")?))
+        let summary: InvestorTrendSummary = resp.field("output1")?;
+        let days: Vec<InvestorTrendDay> = resp.field("output2")?;
+        Ok(resp.envelope((summary, days)))
+    }
+
+    /// 종목별 투자자매매동향(일별) 전체 페이지 수집.
+    ///
+    /// `tr_cont` 헤더 연속조회를 `has_next()`가 false일 때까지 반복.
+    /// 헤더 전용 연속(ctx_area 없음)이라 진전 보장이 없어 `MAX_PAGES`(100)로 상한.
+    pub async fn investor_trend_daily_all(
+        &self,
+        stock_code: &str,
+        date: &str,
+    ) -> Result<(InvestorTrendSummary, Vec<InvestorTrendDay>)> {
+        const MAX_PAGES: usize = 100;
+        let mut summary = InvestorTrendSummary::default();
+        let mut days = Vec::new();
+        let mut cont = false;
+        for _ in 0..MAX_PAGES {
+            let page = self.investor_trend_daily(stock_code, date, cont).await?;
+            let has_next = page.has_next();
+            let (s, mut d) = page.data;
+            if !cont {
+                summary = s; // 첫 페이지 요약만 보존.
+            }
+            days.append(&mut d);
+            if has_next {
+                cont = true;
+            } else {
+                break;
+            }
+        }
+        Ok((summary, days))
     }
 
     /// 종목별 외국인·기관 추정 가집계 — TR 14 `HHPTJ04160200`. output2 배열.

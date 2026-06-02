@@ -2,3 +2,5 @@
 .kis/
 *.env
 Cargo.lock
+.claude/
+token.json

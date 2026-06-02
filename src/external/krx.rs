@@ -262,7 +262,7 @@ impl KrxClient {
         self.fetch(
             BLD_FOREIGN_ALL,
             &[("trdDd", trd_dd), ("mktId", mkt), ("isuLmtRto", "")],
-            "OutBlock_1",
+            "output",
         )
         .await
     }

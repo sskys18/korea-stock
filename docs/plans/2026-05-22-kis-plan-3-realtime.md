@@ -1422,7 +1422,7 @@ cargo test
 //! `cargo run --example realtime_feed -- 005930 000660`
 //! (인자 없으면 005930 기본. Ctrl-C로 종료.)
 
-use kis_adapter::{KisClient, KisConfig, RealtimeEvent, SubscriptionKind};
+use korea_stock::{KisClient, KisConfig, RealtimeEvent, SubscriptionKind};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -1502,7 +1502,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[tokio::test]
 #[ignore = "requires KIS_* credentials + market hours"]
 async fn realtime_subscribe_one() {
-    use kis_adapter::{KisClient, KisConfig, RealtimeEvent, SubscriptionKind};
+    use korea_stock::{KisClient, KisConfig, RealtimeEvent, SubscriptionKind};
 
     let config = KisConfig::from_env().expect("KIS_* env vars");
     let client = KisClient::new(config).expect("client");
@@ -1548,7 +1548,7 @@ async fn realtime_subscribe_one() {
 ## 실시간 WebSocket (Plan 3)
 
 \`\`\`rust
-use kis_adapter::{KisClient, KisConfig, RealtimeEvent, SubscriptionKind};
+use korea_stock::{KisClient, KisConfig, RealtimeEvent, SubscriptionKind};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

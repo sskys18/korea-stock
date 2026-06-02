@@ -6,7 +6,7 @@
 //! `docs/specs/2026-05-22-kis-adapter-design.md` 참조.
 //!
 //! ```ignore
-//! use kis_adapter::{KisClient, KisConfig};
+//! use korea_stock::{KisClient, KisConfig};
 //!
 //! let client = KisClient::new(KisConfig::from_env()?)?;
 //! let price = client.domestic_stock().current_price("005930", Default::default()).await?;

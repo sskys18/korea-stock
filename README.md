@@ -1,8 +1,10 @@
-# kis-adapter
+# korea-stock
 
-한국투자증권(KIS) OpenAPI를 Rust에서 타입 안전하게 쓰는 비동기 어댑터.
+한국투자증권(KIS) + 토스증권(Toss) OpenAPI를 Rust에서 타입 안전하게 쓰는 멀티 브로커 비동기 어댑터.
 
-국내주식·해외주식·국내선물옵션 거래/조회 + 실시간 WebSocket 시세를 단일 크레이트로 제공한다.
+KIS는 국내주식·해외주식·국내선물옵션 거래/조회 + 실시간 WebSocket 시세를,
+Toss는 국내·미국 주식 시세·종목정보·시장정보·계좌·자산·주문(20개 엔드포인트)을
+단일 크레이트의 형제 모듈(`kis`, `toss`)로 제공한다.
 
 ## 특징
 
@@ -19,14 +21,16 @@
 
 ```toml
 [dependencies]
-kis-adapter = { path = "." }
+korea-stock = { path = "." }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
-## 빠른 시작
+크레이트 식별자는 `korea_stock` (하이픈→언더스코어).
+
+## 빠른 시작 (KIS)
 
 ```rust
-use kis_adapter::{KisClient, KisConfig, Market};
+use korea_stock::{KisClient, KisConfig, Market};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -63,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | 실시간 WS | `client.realtime()` | 국내 6종(체결가·호가·예상체결·장운영·회원사·프로그램) × KRX/NXT/통합, 체결통보, 해외체결가 |
 
 ```rust
-use kis_adapter::overseas_stock::OverseasExchange;
+use korea_stock::kis::overseas_stock::OverseasExchange;
 
 let aapl = client
     .overseas_stock()
@@ -75,7 +79,7 @@ println!("{}", aapl.last);
 ### 실시간 WebSocket
 
 ```rust
-use kis_adapter::{KisClient, KisConfig, Market, RealtimeEvent, SubscriptionKind};
+use korea_stock::{KisClient, KisConfig, Market, RealtimeEvent, SubscriptionKind};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -110,18 +114,73 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 기본 `KisConfig.use_hashkey = false`. KIS는 hashkey를 강제하지 않는다. 주문 호출에서
 hashkey 관련 오류가 나면 `true`로 바꿔 재시도한다.
 
+## 토스증권 (Toss)
+
+`korea_stock::toss` 모듈. KIS와 동일 크레이트 내 형제 모듈로, 공통 레이트리미터를 공유한다.
+
+- **20개 엔드포인트 타입 구현** — 시세(호가·현재가·체결·상하한가·캔들), 종목정보, 시장정보(환율·장운영),
+  계좌, 자산(보유주식), 주문(생성·정정·취소·목록·상세), 주문정보(매수가능·판매가능·수수료)
+- **OAuth2 Client Credentials** — `POST /oauth2/token` (form-urlencoded), 토큰 자동 발급·파일 캐싱·만료 갱신
+- **HTTP status 기반 envelope** — `ApiResponse.result` 언래핑, `TossError`(OAuth2/BFF 에러 구분)
+- **계좌 스코프 액세서** — `X-Tossinvest-Account` 헤더를 액세서가 구조적으로 보유해 누락 불가능
+- **429 반응형 재시도** — `Retry-After` 기반, 그룹별 레이트리밋 대응
+- **`raw_call` 탈출구** — 미래 엔드포인트 직접 호출
+
+```rust
+use korea_stock::{TossClient, TossConfig};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = TossClient::new(TossConfig::from_env()?)?;
+
+    // 시세 — 토큰만 필요 (계좌 헤더 불필요)
+    let prices = client.market_data().prices(&["005930", "AAPL"]).await?;
+    for p in &prices {
+        println!("{} = {} {}", p.symbol, p.last_price, p.currency);
+    }
+
+    // 계좌 흐름 — accountSeq 획득 후 계좌 스코프 액세서로 호출
+    let accounts = client.accounts().list().await?;
+    let seq = accounts[0].account_seq;
+    // order_info(seq)/asset(seq)/order(seq) 액세서가 X-Tossinvest-Account를 자동 주입
+    let buying = client.order_info(seq).buying_power("KRW").await?;
+    println!("매수가능: {} {}", buying.cash_buying_power, buying.currency);
+    Ok(())
+}
+```
+
+### Toss 환경변수
+
+| 변수 | 설명 |
+|------|------|
+| `TOSS_CLIENT_ID` | 클라이언트 ID |
+| `TOSS_CLIENT_SECRET` | 클라이언트 시크릿 |
+| `TOSS_BASE_URL` | (선택) Base URL, 기본 `https://openapi.tossinvest.com` |
+| `TOSS_RATE_LIMIT` | (선택) 클라이언트측 글로벌 캡 (req/s) |
+
+설계 근거는 [`docs/specs/2026-06-02-toss-adapter-design.md`](docs/specs/2026-06-02-toss-adapter-design.md),
+엔드포인트 요약은 [`docs/toss-api/endpoints.md`](docs/toss-api/endpoints.md) 참조.
+
 ## 프로젝트 구조
 
 ```
 src/
-├── config.rs ─ error.rs ─ trid.rs ─ ratelimit.rs ─ auth.rs ─ client.rs   # core
-├── domestic_stock/   overseas_stock/   futureoption/                     # REST 도메인
-└── realtime/         # WebSocket — approval·subscribe·decode·crypto·run
+├── lib.rs ─ ratelimit.rs                  # thin 루트 + 브로커 공유 레이트리미터
+├── kis/                                    # 한국투자증권
+│   ├── config.rs ─ error.rs ─ trid.rs ─ auth.rs ─ client.rs   # core
+│   ├── domestic_stock/   overseas_stock/   futureoption/        # REST 도메인
+│   └── realtime/         # WebSocket — approval·subscribe·decode·crypto·run
+└── toss/                                   # 토스증권
+    ├── config.rs ─ error.rs ─ auth.rs ─ client.rs              # core
+    └── market_data·stock_info·market_info·account·order·order_info.rs
 docs/
 ├── specs/    # 설계 문서
-├── plans/    # 구현 계획 (Plan 1~3)
-└── kis-api/  # TR 명세 레퍼런스 (SSOT — 도메인별 응답 필드표)
-examples/     # domestic_quote, domestic_order, overseas_quote, futureoption_quote, realtime_feed
+├── plans/    # 구현 계획 (KIS Plan 1~3)
+├── kis-api/  # KIS TR 명세 레퍼런스 (SSOT)
+└── toss-api/ # Toss OpenAPI 스펙 + 엔드포인트 요약
+examples/
+├── kis_*    # kis_domestic_quote, kis_domestic_order, kis_overseas_quote, kis_futureoption_quote, kis_realtime_feed
+└── toss_*   # toss_quote, toss_order
 ```
 
 ## 테스트

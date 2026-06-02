@@ -1614,7 +1614,7 @@ auth 2개 통과 (총 6 passed).
 //! 현재가 조회 예제. 실행: KIS_* 환경변수 설정 후
 //! `cargo run --example domestic_quote -- 005930`
 
-use kis_adapter::{KisClient, KisConfig};
+use korea_stock::{KisClient, KisConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -1649,8 +1649,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! 잔고 + 매수가능 조회 예제 (주문은 실행 안 함 — 안전).
 //! 실행: `cargo run --example domestic_order`
 
-use kis_adapter::domestic_stock::OrderType;
-use kis_adapter::{KisClient, KisConfig};
+use korea_stock::domestic_stock::OrderType;
+use korea_stock::{KisClient, KisConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -1675,7 +1675,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 > `OrderType`이 공개 경로에 노출돼야 함. `domestic_stock/mod.rs`의 `pub use order::*;`가
-> `OrderType`을 재노출 — 확인. `kis_adapter::domestic_stock::OrderType` 경로 유효.
+> `OrderType`을 재노출 — 확인. `korea_stock::domestic_stock::OrderType` 경로 유효.
 
 검증: `cargo build --example domestic_order` 에러 0.
 커밋: `docs: 잔고·매수가능 조회 예제`
@@ -1690,7 +1690,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! 모의투자 환경 통합 스모크 테스트.
 //! 실행: KIS_* 환경변수 설정 후 `cargo test --test integration -- --ignored`
 
-use kis_adapter::{KisClient, KisConfig};
+use korea_stock::{KisClient, KisConfig};
 
 fn client() -> Option<KisClient> {
     let config = KisConfig::from_env().ok()?;
@@ -1750,7 +1750,7 @@ async fn balance_query() {
 ## 사용법
 
 \`\`\`rust
-use kis_adapter::{KisClient, KisConfig};
+use korea_stock::{KisClient, KisConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

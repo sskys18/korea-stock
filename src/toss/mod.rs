@@ -6,7 +6,7 @@
 //! `docs/specs/2026-06-02-toss-adapter-design.md` 참조.
 //!
 //! ```ignore
-//! use kis_adapter::{TossClient, TossConfig};
+//! use korea_stock::{TossClient, TossConfig};
 //!
 //! let client = TossClient::new(TossConfig::from_env()?)?;
 //! let price = client.market_data().orderbook("005930").await?;

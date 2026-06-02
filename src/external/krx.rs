@@ -48,7 +48,9 @@ pub struct KrxClient {
 impl KrxClient {
     /// 자격증명으로 생성. HTTP는 쿠키 저장 활성화.
     pub fn new(login_id: impl Into<String>, login_pw: impl Into<String>) -> Result<Self> {
+        // TLS는 rustls 고정 — DART만 native-tls(같은 feature). KRX는 기존 동작 유지.
         let http = reqwest::Client::builder()
+            .use_rustls_tls()
             .cookie_store(true)
             .timeout(Duration::from_secs(15))
             .user_agent(USER_AGENT)

@@ -127,8 +127,8 @@ examples/     # domestic_quote, domestic_order, overseas_quote, futureoption_quo
 ## 테스트
 
 ```
-cargo test                                    # 단위 19건
-cargo test --test integration -- --ignored    # 통합 19건 — 자격증명 필요
+cargo test --all-features                     # 단위 42건
+cargo test --test integration -- --ignored    # 통합 24건 — 자격증명 필요
 ```
 
 통합 테스트는 `KIS_*` 환경변수가 있어야 실행된다. 대부분 **조회 전용**(주문 없음)이며,
@@ -137,7 +137,8 @@ cargo test --test integration -- --ignored    # 통합 19건 — 자격증명 �
 
 ## 검증 상태
 
-실전 API 통합테스트 19건으로 응답 struct를 와이어 검증했다.
+실전 API 통합테스트로 응답 struct를 와이어 검증했다. NXT/통합 신규 경로(시세·실시간)는
+공식 샘플 필드맵 기준 — 라이브 와이어 미검증(`docs/specs/2026-06-02-nxt-integration-design.md` 참조).
 
 - **검증 완료** — 국내주식 조회 8(현재가·호가·기간·분봉·매수가능·잔고·일별체결·정정취소가능),
   해외주식 조회 5(현재가·기간·잔고·미체결·체결내역), 선물옵션 시세 2(현재가·호가),

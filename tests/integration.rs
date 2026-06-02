@@ -335,15 +335,12 @@ async fn live_order_unfilled_cycle() {
     let bid_lower = round5((cur as f64 * 0.85) as u64);
     eprintln!("CUR={cur} FAR={bid_far} LOWER={bid_lower}");
 
-    // 2. 매수 (미체결 보장)
+    use kis_adapter::domestic_stock::BalanceBasis;
+
+    // 2. 매수 (미체결 보장). buy 자체가 실패하면 주문이 없으니 그대로 panic 안전.
     let buy = client
         .domestic_stock()
-        .buy(OrderReq::new(
-            stock,
-            OrderType::Limit,
-            1,
-            bid_far,
-        ))
+        .buy(OrderReq::new(stock, OrderType::Limit, 1, bid_far))
         .await
         .expect("buy order");
     eprintln!(
@@ -352,73 +349,55 @@ async fn live_order_unfilled_cycle() {
     );
     assert!(!buy.odno.is_empty(), "주문번호 발급");
 
-    // 원 매수주문 잔량 전부 취소 — 실주문 누수 방지용 best-effort 정리.
-    // (orgno, odno)로 잔량 전량 취소. 정정/취소 단계 어디서 실패해도 호출 가능.
-    let cleanup_cancel = |orgno: String, odno: String| {
-        let ds = client.domestic_stock();
-        async move {
-            ds.cancel(ReviseCancelReq {
-                krx_fwdg_ord_orgno: orgno,
-                orig_order_no: odno,
+    // 3~4. 정정→취소를 Result로 수집 — 단계 실패해도 panic하지 않고 아래 정리로 진행.
+    // (어떤 경로로 나가든 미체결 잔량 취소 + 체결 포지션 청산이 반드시 실행되도록 함.)
+    let cycle: kis_adapter::Result<()> = async {
+        let rev = client
+            .domestic_stock()
+            .revise(ReviseCancelReq {
+                krx_fwdg_ord_orgno: buy.krx_fwdg_ord_orgno.clone(),
+                orig_order_no: buy.odno.clone(),
+                order_type: OrderType::Limit,
+                quantity: 1,
+                price: bid_lower,
+                all: false,
+                exchange: Exchange::Krx,
+            })
+            .await?;
+        eprintln!("REVISE: odno={}", rev.odno);
+        let cancel = client
+            .domestic_stock()
+            .cancel(ReviseCancelReq {
+                krx_fwdg_ord_orgno: rev.krx_fwdg_ord_orgno.clone(),
+                orig_order_no: rev.odno.clone(),
                 order_type: OrderType::Limit,
                 quantity: 1,
                 price: bid_lower,
                 all: true,
                 exchange: Exchange::Krx,
             })
-            .await
-        }
-    };
+            .await?;
+        eprintln!("CANCEL: odno={}", cancel.odno);
+        Ok(())
+    }
+    .await;
 
-    // 3. 정정 (-15%, 잔량). 실패 시 원 매수주문을 반드시 취소 후 패닉.
-    let rev = match client
-        .domestic_stock()
-        .revise(ReviseCancelReq {
-            krx_fwdg_ord_orgno: buy.krx_fwdg_ord_orgno.clone(),
-            orig_order_no: buy.odno.clone(),
-            order_type: OrderType::Limit,
-            quantity: 1,
-            price: bid_lower,
-            all: false,
-            exchange: Exchange::Krx,
-        })
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            let c = cleanup_cancel(buy.krx_fwdg_ord_orgno.clone(), buy.odno.clone()).await;
-            panic!("revise 실패 — 원 매수주문 취소 시도({c:?}): {e}");
-        }
-    };
-    eprintln!("REVISE: odno={}", rev.odno);
-    assert!(!rev.odno.is_empty(), "정정 주문번호");
-
-    // 4. 취소 — 정정 결과 odno 사용, 잔량 전부. 실패해도 원주문 취소 재시도.
-    let cancel = match client
+    // 5. 정리 — 성공/실패 무관하게 항상 실행(panic 전에). 실주문 누수 차단.
+    //   (a) 원 매수주문 잔량 전량 취소(best-effort).
+    let _ = client
         .domestic_stock()
         .cancel(ReviseCancelReq {
-            krx_fwdg_ord_orgno: rev.krx_fwdg_ord_orgno.clone(),
-            orig_order_no: rev.odno.clone(),
+            krx_fwdg_ord_orgno: buy.krx_fwdg_ord_orgno.clone(),
+            orig_order_no: buy.odno.clone(),
             order_type: OrderType::Limit,
             quantity: 1,
             price: bid_lower,
             all: true,
             exchange: Exchange::Krx,
         })
-        .await
-    {
-        Ok(c) => c,
-        Err(e) => {
-            let c = cleanup_cancel(rev.krx_fwdg_ord_orgno.clone(), rev.odno.clone()).await;
-            panic!("cancel 실패 — 잔량 취소 재시도({c:?}): {e}");
-        }
-    };
-    eprintln!("CANCEL: odno={}", cancel.odno);
-    assert!(!cancel.odno.is_empty(), "취소 주문번호");
-
-    // 5. 안전망 — 미체결 가정이 깨져 체결됐으면 포지션이 남는다.
-    // 잔고를 확인해 해당 종목 보유분이 있으면 즉시 시장가 매도로 청산(실포지션 방지).
-    use kis_adapter::domestic_stock::BalanceBasis;
+        .await;
+    //   (b) 미체결 가정이 깨져 체결됐으면 시장가로 청산.
+    let mut filled: Option<String> = None;
     if let Ok((held, _)) = client
         .domestic_stock()
         .balance_all(BalanceBasis::Default)
@@ -433,9 +412,13 @@ async fn live_order_unfilled_cycle() {
                 .domestic_stock()
                 .sell(OrderReq::new(stock, OrderType::Market, qty, 0))
                 .await;
-            panic!("미체결 가정 위반 — {stock} {qty}주 체결됨. 시장가 청산 시도: {flatten:?}");
+            filled = Some(format!("{stock} {qty}주 체결 — 시장가 청산: {flatten:?}"));
         }
     }
+
+    // 6. 정리 끝난 뒤 결과 표면화.
+    cycle.expect("정정/취소 사이클");
+    assert!(filled.is_none(), "미체결 가정 위반 — {filled:?}");
 }
 
 #[tokio::test]

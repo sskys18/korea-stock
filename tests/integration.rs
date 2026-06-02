@@ -415,6 +415,27 @@ async fn live_order_unfilled_cycle() {
     };
     eprintln!("CANCEL: odno={}", cancel.odno);
     assert!(!cancel.odno.is_empty(), "취소 주문번호");
+
+    // 5. 안전망 — 미체결 가정이 깨져 체결됐으면 포지션이 남는다.
+    // 잔고를 확인해 해당 종목 보유분이 있으면 즉시 시장가 매도로 청산(실포지션 방지).
+    use kis_adapter::domestic_stock::BalanceBasis;
+    if let Ok((held, _)) = client
+        .domestic_stock()
+        .balance_all(BalanceBasis::Default)
+        .await
+    {
+        if let Some(pos) = held
+            .iter()
+            .find(|i| i.pdno == stock && i.hldg_qty.trim().parse::<u64>().unwrap_or(0) > 0)
+        {
+            let qty: u64 = pos.hldg_qty.trim().parse().unwrap_or(0);
+            let flatten = client
+                .domestic_stock()
+                .sell(OrderReq::new(stock, OrderType::Market, qty, 0))
+                .await;
+            panic!("미체결 가정 위반 — {stock} {qty}주 체결됨. 시장가 청산 시도: {flatten:?}");
+        }
+    }
 }
 
 #[tokio::test]

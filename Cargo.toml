@@ -21,6 +21,10 @@ aes = "0.8"
 cbc = { version = "0.1", features = ["alloc", "block-padding"] }
 base64 = "0.22"
 
+[features]
+# 외부 소스(KRX MDC·OpenDART) 클라이언트. reqwest 재사용, 추가 의존성 없음.
+external = []
+
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "signal"] }
 tracing-subscriber = "0.3"

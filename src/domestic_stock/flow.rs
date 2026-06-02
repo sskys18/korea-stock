@@ -16,6 +16,7 @@ const TR_INVESTOR_DAILY: TrId = TrId::same("FHPTJ04160001");
 const TR_PROGRAM_TODAY: TrId = TrId::same("FHPPG04600101");
 const TR_PROGRAM_DAILY: TrId = TrId::same("FHPPG04600001");
 const TR_INVESTOR_ESTIMATE: TrId = TrId::same("HHPTJ04160200");
+const TR_SHORT_SALE_DAILY: TrId = TrId::same("FHPST04830000");
 
 /// 시장 구분. 프로그램매매 TR의 `FID_MRKT_CLS_CODE`.
 #[derive(Debug, Clone, Copy)]
@@ -143,7 +144,75 @@ pub struct InvestorTrendEstimate {
     pub sum_fake_ntby_qty: String,
 }
 
+/// 일별 공매도 요약 — output1(현재가 스냅샷).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ShortSaleSummary {
+    pub stck_prpr: String,
+    pub prdy_vrss: String,
+    pub prdy_vrss_sign: String,
+    pub prdy_ctrt: String,
+    pub acml_vol: String,
+    pub prdy_vol: String,
+}
+
+/// 일별 공매도 1일 — output2 배열 요소.
+///
+/// 공매도 *거래*(체결) 신호. 잔고(outstanding)는 KIS 미제공 — KRX 외부 소스.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ShortSaleDay {
+    pub stck_bsop_date: String,
+    pub stck_clpr: String,
+    pub acml_vol: String,
+    /// 공매도 체결 수량.
+    pub ssts_cntg_qty: String,
+    /// 공매도 거래량 비중(%).
+    pub ssts_vol_rlim: String,
+    /// 누적 공매도 체결 수량.
+    pub acml_ssts_cntg_qty: String,
+    /// 누적 공매도 체결 수량 비중(%).
+    pub acml_ssts_cntg_qty_rlim: String,
+    /// 공매도 거래 대금.
+    pub ssts_tr_pbmn: String,
+    /// 공매도 거래대금 비중(%).
+    pub ssts_tr_pbmn_rlim: String,
+    /// 공매도 평균가격.
+    pub avrg_prc: String,
+}
+
 impl DomesticStock<'_> {
+    /// 일별 공매도 — TR 17 `FHPST04830000`.
+    ///
+    /// `start`/`end` YYYYMMDD. (요약 output1, 일별 output2) 반환.
+    /// 종목별 일별 공매도 체결량·비중. 잔고는 미포함(KRX 외부).
+    pub async fn short_sale_daily(
+        &self,
+        stock_code: &str,
+        start: &str,
+        end: &str,
+    ) -> Result<(ShortSaleSummary, Vec<ShortSaleDay>)> {
+        let env = self.client.config().environment;
+        let resp = self
+            .client
+            .call(ApiCall {
+                method: reqwest::Method::GET,
+                path: "/uapi/domestic-stock/v1/quotations/daily-short-sale".into(),
+                tr_id: TR_SHORT_SALE_DAILY.resolve(env)?.into(),
+                tr_cont: None,
+                params: serde_json::json!({
+                    "FID_COND_MRKT_DIV_CODE": "J",
+                    "FID_INPUT_ISCD": stock_code,
+                    "FID_INPUT_DATE_1": start,
+                    "FID_INPUT_DATE_2": end,
+                }),
+                is_post: false,
+                needs_hashkey: false,
+            })
+            .await?;
+        Ok((resp.field("output1")?, resp.field("output2")?))
+    }
+
     /// 종목별 투자자매매동향(일별) 한 페이지 — TR 13 `FHPTJ04160001`.
     ///
     /// `date`: 기준일(YYYYMMDD). `cont=true`면 직전 호출에 이은 연속조회(헤더 `tr_cont=N`).
@@ -328,6 +397,17 @@ mod tests {
     fn investor_trend_estimate_serde_default() {
         let v: InvestorTrendEstimate = serde_json::from_value(serde_json::json!({})).unwrap();
         assert_eq!(v.sum_fake_ntby_qty, "");
+    }
+
+    #[test]
+    fn short_sale_serde_default() {
+        let day: ShortSaleDay = serde_json::from_value(serde_json::json!({
+            "stck_bsop_date": "20240301",
+            "ssts_cntg_qty": "999",
+        }))
+        .unwrap();
+        assert_eq!(day.ssts_cntg_qty, "999");
+        assert_eq!(day.avrg_prc, "");
     }
 
     #[test]

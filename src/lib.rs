@@ -8,6 +8,8 @@ mod ratelimit;
 mod trid;
 
 pub mod domestic_stock;
+#[cfg(feature = "external")]
+pub mod external;
 pub mod futureoption;
 pub mod overseas_stock;
 pub mod realtime;

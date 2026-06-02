@@ -793,7 +793,17 @@ COLUMN_MAPPING(110+ 필드) 참조. 어댑터는 알파 핵심 필드만 타입�
 | 요청 | `FID_COND_MRKT_DIV_CODE`(J), `FID_MRKT_CLS_CODE`(K/Q), `FID_INPUT_DATE_1`, `FID_INPUT_DATE_2` |
 | 응답 | `output` 배열: 차익(`arbt_*`)·비차익(`nabt_*`) 합계 순매수 수량/대금 — `arbt_smtm_ntby_qty`, `nabt_smtn_ntby_qty`, `whol_entm_ntby_qty` 등 70필드(비율 포함). 어댑터는 차익/비차익 순매수 핵심만 타입화. |
 
-> TR 13~16은 codex spec-review가 공식 GitHub 샘플 대조로 검증(2026-06-02). 프롬프트 원안의
+## 17. 일별 공매도
+
+| 항목 | 내용 |
+|---|---|
+| HTTP | `GET /uapi/domestic-stock/v1/quotations/daily-short-sale` |
+| tr_id | `FHPST04830000` |
+| 요청 | `FID_COND_MRKT_DIV_CODE`(J), `FID_INPUT_ISCD`, `FID_INPUT_DATE_1`(시작), `FID_INPUT_DATE_2`(종료) YYYYMMDD |
+| 응답 | `output1`(요약 object) + `output2`(일별 배열): `stck_bsop_date`, `ssts_cntg_qty`(공매도 체결수량), `ssts_vol_rlim`(거래량 비중), `acml_ssts_cntg_qty`(누적), `ssts_tr_pbmn`(거래대금), `avrg_prc`(평균가) 등 |
+| 비고 | 공매도 **거래**(체결) 신호. **잔고**(outstanding)는 KIS 미제공 — KRX MDC `MDCSTAT30502` 외부 조회(`feature=external`). |
+
+> TR 13~17은 codex spec-review/구현 중 공식 GitHub 샘플 대조로 검증(2026-06-02). 프롬프트 원안의
 > `FHKST01010900`(주식현재가 투자자)·`FHPTJ04400000`(foreign-institution-total 랭킹) 오인을 정정.
 > 응답 struct는 컴파일·`#[serde(default)]` 내성만 보장 — 실사용 시 런타임 와이어 검증 필요.
 

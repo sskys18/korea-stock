@@ -73,25 +73,40 @@ TR 13~ 로 추가. 검증 불가 항목은 `[미확인]` 명시 후 해당 메�
 
 ### 5.1 실시간 체결강도
 
-`H0STCNT0`(`SubscriptionKind::DomesticTrade`)는 이미 구독+디코드됨. 작업 = 디코드 struct에
-체결강도 필드(`cttr` 계열) 노출만. 신규 구독 플럼빙 없음.
+`H0STCNT0`(`SubscriptionKind::DomesticTrade`)는 이미 구독+디코드됨. 체결강도 필드(`cttr`)도
+`StockTrade`에 기노출(`decode.rs`). **추가 작업 불요** — codex spec-review 확인.
 
-## 6. P2 — 외부 소스 (`src/external/`, feature `external`)
+### 5.2 일별 공매도 (KIS-native, 재라우팅)
 
-`KisClient` 메서드 아님 — 별도 클라이언트(인증·런타임 이질, KIS 토큰 불사용):
+구현 중 발견: KIS REST가 공매도 *거래*를 직접 제공(`daily_short_sale`). 외부 불요.
+`short_sale_daily(code, start, end)` TR 17 `FHPST04830000` /quotations/daily-short-sale,
+(요약 output1, 일별 output2). 단 공매도 *잔고*(outstanding)는 KIS 미제공 → P2 KRX.
 
-- `KrxClient::short_balance(date, isin) -> Vec<ShortBalance>`
-  - `data.krx.co.kr` MDC: `GenerateOTP.jspx`로 OTP 발급 → `getJsonData.cmd` POST. api-key 불필요.
-- `DartClient::disclosures(...)`, `::financials(...)`
-  - OpenDART REST(`opendart.fss.or.kr/api/*.json`). 자체 `crtfc_key` 필요.
+## 6. P2 — 외부 소스 (`src/external/`, feature `external`) — 재라우팅
 
-신규 `ExternalConfig { dart_api_key: Option<String> }`. `KisError`에 `External { msg }` variant 추가.
-선택 의존성: `urlencoding`(KRX OTP 쿼리). reqwest 재사용.
+**재라우팅(2026-06-02):** 원안은 공매도·재무를 외부로 가정했으나, KIS REST에 `daily_short_sale`·
+`finance_*`·`inquire_investor_daily_by_market`·`frgnmem_*`가 존재함을 확인. KIS-native가
+동일 데이터에서 우월(동일 인증/레이트리밋, 검증 가능)하므로 외부는 **KIS 진짜 부재 항목만**:
 
-## 7. P3 — EOD history (`src/external/history.rs`)
+- `KrxClient::short_balance(start, end, isin)` — 공매도 **잔고**(KIS 부재).
+  - KRX MDC `getJsonData.cmd` POST, bld `dbms/MDC/STAT/srt/MDCSTAT30502`, 응답 `OutBlock_1`.
+  - **OTP 불요** (원안 오류 정정 — OTP는 CSV 다운로드 전용). bld·컬럼은 pykrx 소스/cassette 기준.
+- `KrxClient::foreign_holding(start, end, isin)` — 외국인 보유량 추이(프롬프트 원안 미해결분).
+  - bld `dbms/MDC/STAT/standard/MDCSTAT03702`, 응답 `output`.
+- `DartClient::disclosures(corp_code, bgn_de, end_de)` — 전자공시(KIS 부재).
+  - OpenDART `list.json`, 자체 `crtfc_key`. 필드는 공식 명세.
 
-`investor_eod(start, end, ticker) -> Vec<InvestorEodRow>` — KRX MDC 투자자별 거래실적
-(pykrx-equiv `MDCSTAT*` 계열). 오프라인 학습 데이터 수집용.
+`ExternalConfig { dart_api_key: Option<String> }`. `KisError::External(String)` variant 추가.
+**추가 의존성 없음** — reqwest `.form()`/`.query()` 재사용(원안의 `urlencoding` 불요).
+
+## 7. P3 — EOD history — 재라우팅(대부분 KIS-native로 흡수)
+
+원안의 별도 `history.rs`(pykrx-equiv) 대부분 불요:
+- **종목별 EOD 투자자 history** = `investor_trend_daily_all`(P1)이 헤더 연속조회로 수집.
+- **시장별 EOD 투자자** = KIS `inquire_investor_daily_by_market`(후속 래핑 가능).
+- **외국인 보유 추이** = `KrxClient::foreign_holding`(P2).
+
+KRX 장기간 백테스트(2년 초과)만 분할 호출 필요 — 호출자 책임으로 문서화.
 
 ## 8. 에러·인증 경계
 
@@ -107,6 +122,17 @@ TR 13~ 로 추가. 검증 불가 항목은 `[미확인]` 명시 후 해당 메�
 
 ## 10. 리스크
 
-- KRX MDC OTP 흐름은 비공식 — 엔드포인트 변경 시 깨질 수 있음. feature 게이트로 본체 격리.
-- P0에서 일부 TR `[미확인]` 가능 → 해당 메서드 보류, 문서에 명시.
-- 외부 와이어 검증은 크레덴셜/네트워크 의존 → 컴파일·serde 내성까지만 CI 보장.
+- KRX MDC는 비공식 — 엔드포인트/bld 변경 시 깨질 수 있음. `feature = "external"` 게이트로 본체 격리.
+- 외부(KRX/DART) 와이어 검증은 크레덴셜/네트워크 의존 → 컴파일·serde 내성까지만 CI 보장.
+- KIS 공매도는 *거래*만, *잔고*는 KRX 의존 — 두 신호 성격 구분 필요.
+
+## 11. 구현 현황 (as-built, 2026-06-02)
+
+- **P1 완료**: `flow.rs` — investor_trend_daily(+_all 연속), investor_trend_estimate,
+  program_trade_today/daily, short_sale_daily. TR 13~17 문서화. 단위테스트(serde 내성) 통과.
+- **P2 완료**: `external/` (feature gated) — KrxClient(short_balance, foreign_holding),
+  DartClient(disclosures). 컴파일·serde 내성 통과, **와이어 미검증**.
+- **realtime 체결강도**: 기존 코드에 이미 노출 — 무변경.
+- 검증: `cargo test`(28 통과) + `cargo clippy`(external on/off 모두 clean).
+- 후속(미구현): inquire_investor_daily_by_market 등 추가 KIS-native 래핑, DART financials,
+  외부 와이어 실측 검증.

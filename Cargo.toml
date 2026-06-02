@@ -48,6 +48,9 @@ name = "kis_futureoption_quote"
 name = "kis_realtime_feed"
 
 [[example]]
+name = "kis_lookback_probe"
+
+[[example]]
 name = "toss_quote"
 
 [[example]]

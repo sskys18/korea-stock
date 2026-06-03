@@ -8,15 +8,23 @@
 //! 설계는 Binance를 미러링한다 — 형제 모듈, 독립 에러([`LighterError`]), 액세서
 //! 패턴, 정밀도 보존 String. 차이는 두 가지다:
 //!
-//! 1. **시세는 키 불필요**(REST 공개). `market()`은 완전 구현이다.
-//! 2. **거래 서명은 검증 불가**. Lighter의 주문 서명은 zk 친화 해시(poseidon)+
-//!    schnorr 류의 커스텀 스킴이고, 공식 SDK(`lighter-python`)·비공식
-//!    `lighter-rust` 크레이트 **모두 네이티브 Go 바이너리(`lighter-go`)를 FFI로
-//!    호출**해 서명한다. crates.io에 순수 Rust 구현이 없고, 이 세션에서 해시/서명
-//!    알고리즘을 공식 문서로 재현 검증할 수 없었다. **서명을 날조하지 않는다**
-//!    (HARD RULE 3). 따라서 [`trade`]는 타입드 요청/응답 구조체와 호출 경로까지
-//!    완비하되, 실제 서명 제출은 [`LighterError::SignerUnavailable`]로 명확히 거부한다.
-//!    상태: **data-only**.
+//! 1. **시세는 키 불필요**(REST 공개). `market()`·[`realtime`]은 완전 구현이다.
+//! 2. **거래 서명 — 암호 코어는 검증, 와이어 봉투는 미검증(게이트)**. Lighter 주문
+//!    서명은 zk 친화 해시(Poseidon2/plonky2) + Schnorr over ECgFp5(GFp5 위 소수위
+//!    곡선) 커스텀 스킴이고, 공식 SDK(`lighter-python`)는 **네이티브 바이너리
+//!    (`lighter-go`)를 FFI로 호출**해 서명한다. 본 어댑터는 이를 [`sign`]에 순수
+//!    Rust로 포팅했다.
+//!    - **검증됨:** `poseidon_crypto/signature/schnorr/schnorr_test.go`
+//!      `TestComparativeSchnorrSignAndVerify`의 결정적 벡터(sk,msg,k)→(S,E) 3케이스를
+//!      `sign` `#[cfg(test)]`에 박아 통과 확인했고, 그 벡터가 **upstream Go 소스와
+//!      바이트 일치**함을 독립 대조했다(Schnorr sign+verify가 GFp5·Poseidon2·scalar·
+//!      곡선 연산을 독립 경로로 전이 검증). → 암호 프리미티브는 정확하다.
+//!    - **미검증:** `tx_info` JSON 와이어 봉투·십진 스케일링·`chain_id`·order_expiry
+//!      확장은 불투명한 native `.so`가 만들며 공식 픽스처가 없다. 메시지에 어떤 필드가
+//!      어떤 바이트 레이아웃으로 들어가는지 종단 확정 불가. 따라서 **end-to-end 서명
+//!      제출**은 [`LighterConfig::allow_unverified_signing`] 게이트(기본 false) 뒤에
+//!      있고, 켜기 전 `scripts/lighter_capture_vector.md`로 공식 SDK 출력과 대조해야
+//!      한다. 상태: **암호 검증 / 봉투 미검증(게이트)**.
 //!
 //! ```ignore
 //! use korea_stock::lighter::{LighterClient, LighterConfig, SAMSUNGUSD};
@@ -38,13 +46,16 @@
 mod client;
 mod config;
 mod error;
+pub(crate) mod sign;
 
 pub mod market;
+pub mod realtime;
 pub mod trade;
 
 pub use client::{LighterClient, RawRequest};
-pub use config::{LighterConfig, DEFAULT_BASE_URL, TESTNET_BASE_URL};
+pub use config::{LighterConfig, DEFAULT_BASE_URL, TESTNET_BASE_URL, TESTNET_CHAIN_ID};
 pub use error::{LighterError, Result as LighterResult};
+pub use realtime::{BookEvent, LighterRealtime};
 
 /// 삼성전자 무기한 선물 심볼 (활성 USD-마진 변형, market_id=162).
 pub const SAMSUNGUSD: &str = "SAMSUNGUSD";

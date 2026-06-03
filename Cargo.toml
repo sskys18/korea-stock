@@ -29,6 +29,8 @@ hex = "0.4"
 k256 = { version = "0.13", features = ["ecdsa"] }
 sha3 = "0.10"
 rmp-serde = "1"
+# Lighter(DEX) zk 서명 nonce 등 난수.
+getrandom = "0.2"
 
 [features]
 # 외부 소스(KRX MDC·OpenDART) 클라이언트.

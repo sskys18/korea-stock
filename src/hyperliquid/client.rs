@@ -97,7 +97,10 @@ impl HyperliquidClient {
     ///
     /// 성공 판정은 **HTTP status로만** 하고, `/exchange` 바디 내부의
     /// `{"status":"err"}`는 호출부([`trade`])에서 별도 해석한다(원시 JSON 보존).
-    pub(crate) async fn post_json(&self, path: &str, body: &Value) -> Result<Value> {
+    pub(crate) async fn post_json<T>(&self, path: &str, body: &T) -> Result<Value>
+    where
+        T: Serialize + ?Sized,
+    {
         const MAX_RETRIES: u32 = 4;
         let mut attempt = 0;
         loop {
@@ -114,7 +117,10 @@ impl HyperliquidClient {
     }
 
     /// 단일 POST. (선택)레이트캡 → 전송 → status 분기. 429는 대기 후 `Api{429}` 반환.
-    async fn post_once(&self, path: &str, body: &Value) -> Result<Value> {
+    async fn post_once<T>(&self, path: &str, body: &T) -> Result<Value>
+    where
+        T: Serialize + ?Sized,
+    {
         if let Some(limiter) = &self.limiter {
             limiter.acquire().await;
         }
@@ -173,8 +179,11 @@ impl HyperliquidClient {
             signature,
             vault_address: self.config.vault_address.clone(),
         };
-        let body = serde_json::to_value(&req)?;
-        self.post_json("/exchange", &body).await
+        // 타입드 struct를 그대로 직렬화해 전송한다. `serde_json::to_value`를 거치면
+        // 기본 BTreeMap이 키를 알파벳순 정렬해(예 OrderWire r↔s) **서명한 msgpack
+        // 선언순서와 어긋난다** — reqwest `.json(&req)`는 serde 직렬화로 선언순서를
+        // 보존해 서명 바디와 전송 바디를 일치시킨다.
+        self.post_json("/exchange", &req).await
     }
 }
 

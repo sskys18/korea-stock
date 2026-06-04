@@ -419,6 +419,19 @@ mod tests {
         assert_eq!(v["t"]["limit"]["tif"], "Gtc");
     }
 
+    // 전송 바디(serde 직렬화)가 **서명한 msgpack 선언순서**(a,b,p,s,r,t)를 보존하는지
+    // 가드한다. `serde_json::to_string`은 serde 직렬화라 선언순서 유지 — 키를 정렬하는
+    // `to_value`(BTreeMap)와 달리 r↔s가 뒤집히지 않는다. 필드 재배열 회귀를 잡는다.
+    #[test]
+    fn order_wire_json_preserves_signed_field_order() {
+        let action = OrderRequest::limit(110034, true, "240.0", "1", Tif::Gtc).to_action();
+        let wire = serde_json::to_string(&action.orders[0]).unwrap();
+        assert_eq!(
+            wire,
+            r#"{"a":110034,"b":true,"p":"240.0","s":"1","r":false,"t":{"limit":{"tif":"Gtc"}}}"#
+        );
+    }
+
     #[test]
     fn order_wire_includes_cloid_when_set() {
         let action = OrderRequest::limit(110034, false, "240.0", "1", Tif::Alo)

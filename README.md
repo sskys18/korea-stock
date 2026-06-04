@@ -3,29 +3,17 @@
 한국투자증권(KIS) + 토스증권(Toss) + 암호화폐 거래소·DEX의 한국주식 무기한선물을
 Rust에서 타입 안전하게 쓰는 멀티 venue 비동기 어댑터.
 
-venue는 두 그룹으로 묶인다. **`domestic`** — 국내 증권사(`kis`·`toss`): KIS는
-국내·해외주식·국내선물옵션 거래/조회 + 실시간 WebSocket 시세를, Toss는 국내·미국
-주식 시세·종목정보·시장정보·계좌·자산·주문(20개 엔드포인트)을 제공한다.
-**`global`** — 한국 대형주(삼성전자·SK하이닉스·현대차, 일부 KOSPI200 지수) 무기한선물
-(perp)을 상장한 글로벌 거래소·DEX **16곳**(CEX 12: binance·bybit·bitget·kucoin·
-gateio·bingx·mexc·htx·phemex·bitunix·toobit·weex / DEX 4: hyperliquid·lighter·
-aster·pacifica): 시세·거래.
+venue는 두 그룹. **`domestic`** — 국내 증권사(`kis`·`toss`). **`global`** — 한국
+대형주 perp을 상장한 글로벌 거래소·DEX 16곳. 공유 트레이트 없음(서명·주문모델 상이),
+종목 식별자 [`KrStock`] enum만 공유.
 
-공유 트레이트는 없다(서명·주문모델 상이). 종목 식별자만 [`KrStock`] enum으로
-공유하고, 각 venue가 `KrStock`→자기 심볼로 매핑한다(`global::binance::symbol` 등).
-자세한 능력 매트릭스는
-[`docs/specs/2026-06-02-kr-perp-venues-design.md`](docs/specs/2026-06-02-kr-perp-venues-design.md).
+## 구성
 
-## 특징
-
-- **4개 도메인 31개 타입 TR** — 요청·응답이 모두 타입 struct
-- **실시간 WebSocket** — 체결가·호가·예상체결·장운영·회원사·프로그램매매·체결통보, AES-256-CBC 복호화 자동
-- **NXT·통합시세** — KRX/NXT(넥스트레이드)/통합 거래소 선택(시세·주문·실시간)
-- **실전/모의투자** — `KIS_ENV`로 런타임 분기, TR ID 자동 매핑
-- **토큰 자동 관리** — 발급·파일 캐싱·만료 갱신
-- **레이트리밋 + 재시도** — 토큰버킷, `EGW00201`(초당 거래건수 초과) 지수 백오프
-- **연속조회** — `KisResponse<T>` envelope로 커서 보존, `*_all` 헬퍼
-- **`raw_call` 탈출구** — 미구현 TR도 직접 호출
+| 그룹 | 모듈 | 범위 | 상세 |
+|---|---|---|---|
+| `domestic` | `kis` | 국내·해외주식·국내선물옵션 거래/조회 + 실시간 WebSocket 시세 (4개 도메인 31타입 TR) | [KIS](#kis) |
+| `domestic` | `toss` | 국내·미국 주식 시세·종목·시장·계좌·자산·주문 (20 엔드포인트) | [Toss](#toss) |
+| `global` | 16 venue | KR 대형주 perp 시세·거래 (CEX 12 / DEX 4) | [venues](docs/venues.md) |
 
 ## 설치
 
@@ -37,7 +25,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 크레이트 식별자는 `korea_stock` (하이픈→언더스코어).
 
-## 빠른 시작 (KIS)
+## 빠른 시작
 
 ```rust
 use korea_stock::{KisClient, KisConfig, Market};
@@ -55,172 +43,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### 환경변수
+```rust
+// 글로벌 perp — 시세는 키 불필요
+use korea_stock::global::binance::{BinanceClient, BinanceConfig, SAMSUNG};
+let client = BinanceClient::new(BinanceConfig::public())?;
+let idx = client.market().premium_index(SAMSUNG).await?;     // 마크가·펀딩
+```
 
-| 변수 | 설명 |
-|------|------|
-| `KIS_APP_KEY` | 앱 키 |
-| `KIS_APP_SECRET` | 앱 시크릿 |
+## KIS
+
+- **4개 도메인 31타입 TR** — 요청·응답 모두 타입 struct.
+- **실시간 WebSocket** — 체결가·호가·예상체결·장운영·회원사·프로그램매매·체결통보, AES-256-CBC 자동 복호화.
+- **NXT·통합시세** — KRX/NXT(넥스트레이드)/통합 거래소 선택(시세·주문·실시간).
+- **실전/모의투자** — `KIS_ENV` 런타임 분기, TR ID 자동 매핑.
+- **토큰 자동 관리·레이트리밋·연속조회** — 발급·캐싱·갱신, 토큰버킷 + 지수 백오프, `*_all` 커서 헬퍼.
+- **`raw_call` 탈출구** — 미구현 TR 직접 호출.
+
+| 환경변수 | 설명 |
+|---|---|
+| `KIS_APP_KEY` / `KIS_APP_SECRET` | 앱 키 / 시크릿 |
 | `KIS_ACCOUNT_NO` | 계좌번호 앞 8자리 |
 | `KIS_ACCOUNT_PRODUCT` | 계좌상품코드 뒤 2자리 (예: `01`) |
 | `KIS_ENV` | `real` 또는 `mock` (기본 `mock`) |
 
-`KisConfig`를 직접 구성하면 환경변수 없이도 사용 가능하다.
+도메인 TR 명세(SSOT): [`docs/kis-api/`](docs/kis-api/) · 실시간 WS: [`docs/kis-api/realtime.md`](docs/kis-api/realtime.md) · 설계: [`docs/specs/2026-05-22-kis-adapter-design.md`](docs/specs/2026-05-22-kis-adapter-design.md).
 
-## 도메인
+## Toss
 
-| 도메인 | 액세서 | TR |
-|--------|--------|-----|
-| 국내주식 | `client.domestic_stock()` | 시세·호가·기간/분봉, 매수/매도/정정/취소, 잔고·매수가능·일별체결·정정취소가능 (12) |
-| 해외주식 | `client.overseas_stock()` | 현재가·기간시세, 매수/매도/정정취소, 잔고·미체결·체결내역 (8) |
-| 국내선물옵션 | `client.futureoption()` | 현재가·호가, 주문/정정취소, 잔고·체결내역·주문가능 (7) |
-| 실시간 WS | `client.realtime()` | 국내 6종(체결가·호가·예상체결·장운영·회원사·프로그램) × KRX/NXT/통합, 체결통보, 해외체결가 |
+`korea_stock::domestic::toss` 모듈. KIS와 함께 `domestic` 그룹 소속, 공통 레이트리미터 공유.
 
-```rust
-use korea_stock::domestic::kis::overseas_stock::OverseasExchange;
+- **20 엔드포인트 타입 구현** — 시세·종목정보·시장정보·계좌·자산·주문·주문정보.
+- **OAuth2 Client Credentials** — 토큰 자동 발급·캐싱·갱신.
+- **HTTP status 기반 envelope** + **계좌 스코프 액세서**(`X-Tossinvest-Account` 구조적 보유) + **429 반응형 재시도**.
 
-let aapl = client
-    .overseas_stock()
-    .current_price(OverseasExchange::Nasd, "AAPL")
-    .await?;
-println!("{}", aapl.last);
-```
-
-### 실시간 WebSocket
-
-```rust
-use korea_stock::{KisClient, KisConfig, Market, RealtimeEvent, SubscriptionKind};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = KisClient::new(KisConfig::from_env()?)?;
-    let mut rt = client.realtime().await?;
-    let mut events = rt.take_events().unwrap();
-
-    let _handle = rt
-        .subscribe(SubscriptionKind::DomesticTrade(Market::Krx), "005930")
-        .await?;
-
-    while let Some(ev) = events.recv().await {
-        if let RealtimeEvent::DomesticTrade { tr_key, data, .. } = ev {
-            println!("{tr_key} {}", data.stck_prpr);
-        }
-    }
-    Ok(())
-}
-```
-
-- 체결통보는 AES-256-CBC 복호화 자동 처리 (`tr_key`는 HTS ID).
-- `SubscriptionHandle` drop 시 자동 해지. 동시 구독 한도 약 41건.
-- 연결 끊김 시 자동 재연결·재구독 — `RealtimeEvent::Reconnecting`/`Reconnected` 통지.
-- 채널 포화 시 새 이벤트 드롭 + `RealtimeEvent::Lagged(n)` 통지.
-
-### 미구현 TR — `raw_call`
-
-타입 TR로 노출되지 않은 TR은 `raw_call`로 직접 호출한다 (응답은 `serde_json::Value`).
-
-### 주문 hashkey
-
-기본 `KisConfig.use_hashkey = false`. KIS는 hashkey를 강제하지 않는다. 주문 호출에서
-hashkey 관련 오류가 나면 `true`로 바꿔 재시도한다.
-
-## 토스증권 (Toss)
-
-`korea_stock::domestic::toss` 모듈. KIS와 함께 `domestic` 그룹에 묶이며 공통 레이트리미터를 공유한다.
-
-- **20개 엔드포인트 타입 구현** — 시세(호가·현재가·체결·상하한가·캔들), 종목정보, 시장정보(환율·장운영),
-  계좌, 자산(보유주식), 주문(생성·정정·취소·목록·상세), 주문정보(매수가능·판매가능·수수료)
-- **OAuth2 Client Credentials** — `POST /oauth2/token` (form-urlencoded), 토큰 자동 발급·파일 캐싱·만료 갱신
-- **HTTP status 기반 envelope** — `ApiResponse.result` 언래핑, `TossError`(OAuth2/BFF 에러 구분)
-- **계좌 스코프 액세서** — `X-Tossinvest-Account` 헤더를 액세서가 구조적으로 보유해 누락 불가능
-- **429 반응형 재시도** — `Retry-After` 기반, 그룹별 레이트리밋 대응
-- **`raw_call` 탈출구** — 미래 엔드포인트 직접 호출
-
-```rust
-use korea_stock::{TossClient, TossConfig};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = TossClient::new(TossConfig::from_env()?)?;
-
-    // 시세 — 토큰만 필요 (계좌 헤더 불필요)
-    let prices = client.market_data().prices(&["005930", "AAPL"]).await?;
-    for p in &prices {
-        println!("{} = {} {}", p.symbol, p.last_price, p.currency);
-    }
-
-    // 계좌 흐름 — accountSeq 획득 후 계좌 스코프 액세서로 호출
-    let accounts = client.accounts().list().await?;
-    let seq = accounts[0].account_seq;
-    // order_info(seq)/asset(seq)/order(seq) 액세서가 X-Tossinvest-Account를 자동 주입
-    let buying = client.order_info(seq).buying_power("KRW").await?;
-    println!("매수가능: {} {}", buying.cash_buying_power, buying.currency);
-    Ok(())
-}
-```
-
-### Toss 환경변수
-
-| 변수 | 설명 |
-|------|------|
-| `TOSS_CLIENT_ID` | 클라이언트 ID |
-| `TOSS_CLIENT_SECRET` | 클라이언트 시크릿 |
-| `TOSS_BASE_URL` | (선택) Base URL, 기본 `https://openapi.tossinvest.com` |
+| 환경변수 | 설명 |
+|---|---|
+| `TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` | 클라이언트 ID / 시크릿 |
+| `TOSS_BASE_URL` | (선택) 기본 `https://openapi.tossinvest.com` |
 | `TOSS_RATE_LIMIT` | (선택) 클라이언트측 글로벌 캡 (req/s) |
 
-설계 근거는 [`docs/specs/2026-06-02-toss-adapter-design.md`](docs/specs/2026-06-02-toss-adapter-design.md),
-엔드포인트 요약은 [`docs/toss-api/endpoints.md`](docs/toss-api/endpoints.md) 참조.
+엔드포인트 요약: [`docs/toss-api/endpoints.md`](docs/toss-api/endpoints.md) · 설계: [`docs/specs/2026-06-02-toss-adapter-design.md`](docs/specs/2026-06-02-toss-adapter-design.md).
 
-## 암호화폐 거래소·DEX — KR 주식 무기한선물 (perp)
+## 글로벌 perp (16 venue)
 
-2026년 다수 CEX·perp DEX가 한국 대형주(삼성전자·SK하이닉스·현대차, 일부는 KOSPI200
-지수) 무기한선물을 상장했다. 각 venue는 `global` 그룹의 독립 모듈이다(공유 트레이트
-없음 — 종목 어휘 [`KrStock`]만 공유). 시세는 모두 **라이브 검증**(2026-06-04, 키 불필요
-공개 API). **거래 코드는 오프라인(파싱·서명벡터)만 검증 — 어떤 venue도 testnet/live로
-실주문된 적 없다. 실자금 전 testnet 왕복 필수.**
+CEX 12(binance·bybit·bitget·kucoin·gateio·bingx·mexc·htx·phemex·bitunix·toobit·weex)
++ DEX 4(hyperliquid·lighter·aster·pacifica). 시세 전부 라이브 검증, 거래는 오프라인
+서명벡터만 검증(**실주문 이력 없음, 실자금 전 testnet 필수**).
 
-| 모듈 | 종류 | 시세 | 거래 | 서명 |
-|---|---|---|---|---|
-| `binance` | CEX | ✅ | 주문/취소/포지션/잔고/레버리지 | HMAC-SHA256 (공식 doc 벡터 검증) |
-| `bybit` | CEX (v5 linear) | ✅ | 주문/취소/포지션/잔고 | HMAC-SHA256 (openssl 벡터 검증) |
-| `bitget` | CEX (USDT-M) | ✅ | 주문/취소/포지션 | HMAC-SHA256 Base64 + passphrase (openssl 벡터 검증) |
-| `kucoin` | CEX (futures) | ✅ | 주문/취소/포지션 | HMAC-SHA256 Base64 + passphrase v2 (openssl 벡터 검증) |
-| `gateio` | CEX (USDT perp) | ✅ | 주문/취소 | HMAC-SHA512 (공식 Python gen_sign 벡터 검증) |
-| `bingx` | CEX (perp swap) | ✅ | 주문/취소/포지션/레버리지 | HMAC-SHA256 (공식 doc 벡터 검증) |
-| `mexc` | CEX | ✅ | 조회만 (신규주문 서버측 차단) | HMAC-SHA256 |
-| `htx` | CEX (USDT-M swap) | ✅ | 주문/취소/포지션 | HMAC-SHA256 Base64, GET-스타일 prehash (openssl 교차검증) |
-| `phemex` | CEX (Perp v2) | ✅ | 주문/취소/포지션 | HMAC-SHA256, base64url 시크릿 (공식 doc 벡터 검증) |
-| `bitunix` | CEX | ✅(PREVIEW) | 주문/취소/포지션 | 더블 SHA256 (공식 ref 벡터 검증) |
-| `toobit` | CEX (swap) | ✅ | 주문/취소 | HMAC-SHA256 (공식 doc 벡터 검증) |
-| `weex` | CEX | ✅ | 주문/취소/포지션 | HMAC-SHA256 Base64 |
-| `hyperliquid` | DEX (HIP-3/Trade.xyz) | ✅ | 주문(IOC)/취소 | EIP-712+secp256k1 (서명 primitive upstream SDK 벡터 검증) |
-| `lighter` | DEX (zk) | ✅ +WS | 주문/취소 (게이트) | Poseidon2+Schnorr 순수Rust (암호코어 upstream 벡터 검증, tx봉투 미검증) |
-| `aster` | DEX (BNB Chain) | ✅ | 주문/취소/포지션 | HMAC-SHA256 (Binance-호환 fapi, 2 doc 벡터 검증; on-chain EIP-712 미구현) |
-| `pacifica` | DEX (Solana) | ✅ | 주문/취소 (게이트) | Ed25519+base58 (공식 python-sdk 골든벡터 검증, 봉투 검증) |
-
-**16 venue** (CEX 12 / DEX 4). 종목 커버리지 차이:
-- **KOSPI200 지수**: `hyperliquid`(`xyz:KR200`)·`bingx`(`NCSIKOSPI2USD-USDT`)·`lighter`(`KRCOMP`)만 상장. 그 외 `symbol(KrStock::Kospi200)`은 `None`.
-- **현대차 미상장**: `bingx`·`aster`·`pacifica`는 삼성·SK하이닉스만 → `symbol(KrStock::HyundaiMotor)`은 `None`.
-- `bitunix` KR 심볼은 현재 `symbolStatus=PREVIEW`(상장 전, mark만 응답).
-- `pacifica` 거래는 `allow_unverified_signing`(기본 false) 게이트 뒤(`lighter`와 동일).
-
-```rust
-use korea_stock::global::binance::{BinanceClient, BinanceConfig, SAMSUNG};
-let client = BinanceClient::new(BinanceConfig::public())?;   // 시세는 키 불필요
-let idx = client.market().premium_index(SAMSUNG).await?;     // 마크가·펀딩
-
-// 종목 어휘로 venue 비종속 조회:
-use korea_stock::KrStock;
-let sym = korea_stock::global::bybit::symbol(KrStock::SamsungElec).unwrap(); // "SAMSUNGUSDT"
-```
-
-- 환경변수: 각 venue `<VENUE>_API_KEY`/`<VENUE>_API_SECRET` (예 `BYBIT_API_KEY`,
-  `HTX_API_SECRET`). DEX는 `HYPERLIQUID_*`(비밀키)·`LIGHTER_*`.
-- Lighter 거래는 `LighterConfig::allow_unverified_signing`(기본 false) 게이트 뒤 —
-  tx_info 봉투가 미검증이므로 `scripts/lighter_capture_vector.md`로 공식 SDK 출력과
-  대조 후 해제할 것.
-- Hyperliquid 운영 주문은 `trade().place_by_coin(DEX, coin, ...)` 사용 — asset id를
-  라이브 meta에서 재도출해 wrong-instrument 사고를 막는다.
+구현·서명 매트릭스·종목 커버리지·환경변수·게이트: **[`docs/venues.md`](docs/venues.md)**.
 
 ## 프로젝트 구조
 
@@ -228,29 +98,16 @@ let sym = korea_stock::global::bybit::symbol(KrStock::SamsungElec).unwrap(); // 
 src/
 ├── lib.rs ─ ratelimit.rs ─ kr_stock.rs    # thin 루트 + 공유 레이트리미터 + KrStock 어휘
 ├── domestic/                               # 국내 증권사
-│   ├── kis/                                # 한국투자증권
-│   │   ├── config·error·trid·auth·client.rs                    # core
-│   │   ├── domestic_stock/  overseas_stock/  futureoption/      # REST 도메인
-│   │   └── realtime/        # WebSocket — approval·subscribe·decode·crypto·run
-│   └── toss/                               # 토스증권
-│       ├── config·error·auth·client.rs                          # core
-│       └── market_data·stock_info·market_info·account·order·order_info.rs
-└── global/                                 # KR-주식 perp 거래소·DEX (venue별 6파일: config·error·client·market·trade·mod)
+│   ├── kis/        # config·error·trid·auth·client + domestic_stock/overseas_stock/futureoption/realtime
+│   └── toss/       # config·error·auth·client + market_data·stock_info·market_info·account·order·order_info
+└── global/         # KR-주식 perp (venue별 6파일: config·error·client·market·trade·mod)
     ├── binance·bybit·bitget·kucoin·gateio·bingx·mexc·htx·phemex·bitunix·toobit·weex/  # CEX 12 (HMAC 계열)
     ├── hyperliquid/   # Trade.xyz HIP-3 — EIP-712+secp256k1
-    ├── lighter/       # zkLighter — Poseidon2/Schnorr + realtime(WS) + sign.rs
+    ├── lighter/       # zkLighter — Poseidon2/Schnorr + realtime(WS)
     ├── aster/         # BNB Chain — Binance-호환 fapi HMAC
-    └── pacifica/      # Solana — Ed25519 + sign.rs (게이트)
-docs/
-├── specs/     # 설계 문서
-├── plans/     # 구현 계획 (KIS Plan 1~3)
-├── research/  # perp venue 센서스 + 어댑터 빌드 계약서
-├── kis-api/   # KIS TR 명세 레퍼런스 (SSOT)
-└── toss-api/  # Toss OpenAPI 스펙 + 엔드포인트 요약
-examples/
-├── kis_* · toss_*                          # 증권사 시세·주문
-├── <venue>_kr_quote                        # venue별 키 불필요 라이브 시세 (binance·bybit·htx·phemex·toobit·weex·bitunix)
-└── kr_perp_live_check                      # binance·hyperliquid·lighter·mexc 통합 라이브 검증
+    └── pacifica/      # Solana — Ed25519 (게이트)
+docs/    # specs(설계) · plans(구현계획) · research(perp 센서스) · kis-api(TR SSOT) · toss-api(스펙) · venues.md
+examples/  # kis_*·toss_* · <venue>_kr_quote · kr_perp_live_check
 ```
 
 ## 테스트
@@ -260,28 +117,20 @@ cargo test                                    # 단위 349건 (16개 perp venue 
 cargo test --test integration -- --ignored    # 통합 24건 — 자격증명 필요
 ```
 
-통합 테스트는 `KIS_*` 환경변수가 있어야 실행된다. 대부분 **조회 전용**(주문 없음)이며,
-예외로 `live_order_unfilled_cycle`은 `KIS_LIVE_ORDER_TEST=1` 가드 + 장중에만 실행되는
-실주문(미체결 매수→정정→취소) 사이클이다. 중간 실패 시 원주문을 best-effort 취소한다.
-
-## 검증 상태
-
-실전 API 통합테스트로 응답 struct를 와이어 검증했다. NXT/통합 신규 경로(시세·실시간)는
-공식 샘플 필드맵 기준 — 라이브 와이어 미검증(`docs/specs/2026-06-02-nxt-integration-design.md` 참조).
-
-- **검증 완료** — 국내주식 조회 8(현재가·호가·기간·분봉·매수가능·잔고·일별체결·정정취소가능),
-  해외주식 조회 5(현재가·기간·잔고·미체결·체결내역), 선물옵션 시세 2(현재가·호가),
-  실시간 WS 구독.
-- **미검증** — 주문 TR(매수/매도/정정/취소)은 실거래가 발생하므로 자동 테스트하지 않는다.
-  선물옵션 잔고·체결·주문가능은 선물옵션 거래계좌가 있어야 응답을 검증할 수 있다.
-- 미검증 TR의 응답 struct는 컴파일·`#[serde(default)]` 내성만 보장 — 실사용 시
-  `rt_cd`/필드 오류가 나면 `docs/kis-api/*.md`와 대조한다.
+통합 테스트는 `KIS_*` 환경변수 필요. 대부분 **조회 전용**(주문 없음), 예외로
+`live_order_unfilled_cycle`은 `KIS_LIVE_ORDER_TEST=1` 가드 + 장중 한정 실주문
+사이클(중간 실패 시 원주문 best-effort 취소). 검증 상태 상세: [`docs/specs/`](docs/specs/).
 
 ## 문서
 
-- 설계: [`docs/specs/`](docs/specs/)
-- 구현 계획: [`docs/plans/`](docs/plans/)
-- TR 명세 (SSOT): [`docs/kis-api/`](docs/kis-api/)
+| 디렉터리 | 내용 |
+|---|---|
+| [`docs/specs/`](docs/specs/) | 설계 문서 (KIS·Toss·perp·NXT·alpha-signals) |
+| [`docs/plans/`](docs/plans/) | 구현 계획 (KIS Plan 1~3) |
+| [`docs/research/`](docs/research/) | perp venue 센서스 + 어댑터 빌드 계약서 |
+| [`docs/kis-api/`](docs/kis-api/) | KIS TR 명세 레퍼런스 (SSOT) |
+| [`docs/toss-api/`](docs/toss-api/) | Toss OpenAPI 스펙 + 엔드포인트 요약 |
+| [`docs/venues.md`](docs/venues.md) | 글로벌 16 venue 구현·서명·커버리지 |
 
 ## 라이선스
 

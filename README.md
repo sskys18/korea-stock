@@ -171,25 +171,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## 암호화폐 거래소·DEX — KR 주식 무기한선물 (perp)
 
-2026년 다수 CEX·perp DEX가 한국 대형주(삼성전자·SK하이닉스·현대차) 무기한선물을
-상장했다. 각 venue는 `global` 그룹의 독립 모듈이다(공유 트레이트 없음). 시세는 모두 라이브
-검증됐고, **거래 코드는 오프라인(파싱·서명벡터)만 검증 — 어떤 venue도 testnet/live로
+2026년 다수 CEX·perp DEX가 한국 대형주(삼성전자·SK하이닉스·현대차, 일부는 KOSPI200
+지수) 무기한선물을 상장했다. 각 venue는 `global` 그룹의 독립 모듈이다(공유 트레이트
+없음 — 종목 어휘 [`KrStock`]만 공유). 시세는 모두 **라이브 검증**(2026-06-04, 키 불필요
+공개 API). **거래 코드는 오프라인(파싱·서명벡터)만 검증 — 어떤 venue도 testnet/live로
 실주문된 적 없다. 실자금 전 testnet 왕복 필수.**
 
 | 모듈 | 종류 | 시세 | 거래 | 서명 |
 |---|---|---|---|---|
 | `binance` | CEX | ✅ | 주문/취소/포지션/잔고/레버리지 | HMAC-SHA256 (공식 doc 벡터 검증) |
-| `hyperliquid` | DEX (HIP-3/Trade.xyz) | ✅ | 주문(IOC)/취소 | EIP-712+secp256k1 (서명 primitive upstream SDK 벡터 검증) |
+| `bybit` | CEX (v5 linear) | ✅ | 주문/취소/포지션/잔고 | HMAC-SHA256 (openssl 벡터 검증) |
 | `mexc` | CEX | ✅ | 조회만 (신규주문 서버측 차단) | HMAC-SHA256 |
+| `htx` | CEX (USDT-M swap) | ✅ | 주문/취소/포지션 | HMAC-SHA256 Base64, GET-스타일 prehash (openssl 교차검증) |
+| `phemex` | CEX (Perp v2) | ✅ | 주문/취소/포지션 | HMAC-SHA256, base64url 시크릿 (공식 doc 벡터 검증) |
+| `bitunix` | CEX | ✅(PREVIEW) | 주문/취소/포지션 | 더블 SHA256 (공식 ref 벡터 검증) |
+| `toobit` | CEX (swap) | ✅ | 주문/취소 | HMAC-SHA256 (공식 doc 벡터 검증) |
+| `weex` | CEX | ✅ | 주문/취소/포지션 | HMAC-SHA256 Base64 |
+| `hyperliquid` | DEX (HIP-3/Trade.xyz) | ✅ | 주문(IOC)/취소 | EIP-712+secp256k1 (서명 primitive upstream SDK 벡터 검증) |
 | `lighter` | DEX (zk) | ✅ +WS | 주문/취소 (게이트) | Poseidon2+Schnorr 순수Rust (암호코어 upstream 벡터 검증, tx봉투 미검증) |
+
+`binance`·`bybit`·`hyperliquid`는 KOSPI200 지수도 매핑(`hyperliquid`만 상장 — `xyz:KR200`).
+`bitunix` KR 심볼은 현재 `symbolStatus=PREVIEW`(상장 전, mark만 응답).
 
 ```rust
 use korea_stock::global::binance::{BinanceClient, BinanceConfig, SAMSUNG};
 let client = BinanceClient::new(BinanceConfig::public())?;   // 시세는 키 불필요
 let idx = client.market().premium_index(SAMSUNG).await?;     // 마크가·펀딩
+
+// 종목 어휘로 venue 비종속 조회:
+use korea_stock::KrStock;
+let sym = korea_stock::global::bybit::symbol(KrStock::SamsungElec).unwrap(); // "SAMSUNGUSDT"
 ```
 
-- 환경변수: `BINANCE_API_KEY/SECRET`, `HYPERLIQUID_*`(비밀키), `MEXC_*`, `LIGHTER_*`.
+- 환경변수: 각 venue `<VENUE>_API_KEY`/`<VENUE>_API_SECRET` (예 `BYBIT_API_KEY`,
+  `HTX_API_SECRET`). DEX는 `HYPERLIQUID_*`(비밀키)·`LIGHTER_*`.
 - Lighter 거래는 `LighterConfig::allow_unverified_signing`(기본 false) 게이트 뒤 —
   tx_info 봉투가 미검증이므로 `scripts/lighter_capture_vector.md`로 공식 SDK 출력과
   대조 후 해제할 것.
@@ -200,33 +215,35 @@ let idx = client.market().premium_index(SAMSUNG).await?;     // 마크가·펀�
 
 ```
 src/
-├── lib.rs ─ ratelimit.rs                  # thin 루트 + 브로커 공유 레이트리미터
-├── kis/                                    # 한국투자증권
-│   ├── config.rs ─ error.rs ─ trid.rs ─ auth.rs ─ client.rs   # core
-│   ├── domestic_stock/   overseas_stock/   futureoption/        # REST 도메인
-│   └── realtime/         # WebSocket — approval·subscribe·decode·crypto·run
-├── toss/                                   # 토스증권
-│   ├── config.rs ─ error.rs ─ auth.rs ─ client.rs              # core
-│   └── market_data·stock_info·market_info·account·order·order_info.rs
-├── binance/      # Binance USDM Futures — config·error·client(HMAC)·market·trade
-├── hyperliquid/  # Trade.xyz HIP-3 — client(EIP-712)·market·trade
-├── lighter/      # zkLighter — client·market·trade·realtime(WS)·sign(Poseidon2/Schnorr)
-└── mexc/                                   # MEXC Contract — client(HMAC)·market·trade
+├── lib.rs ─ ratelimit.rs ─ kr_stock.rs    # thin 루트 + 공유 레이트리미터 + KrStock 어휘
+├── domestic/                               # 국내 증권사
+│   ├── kis/                                # 한국투자증권
+│   │   ├── config·error·trid·auth·client.rs                    # core
+│   │   ├── domestic_stock/  overseas_stock/  futureoption/      # REST 도메인
+│   │   └── realtime/        # WebSocket — approval·subscribe·decode·crypto·run
+│   └── toss/                               # 토스증권
+│       ├── config·error·auth·client.rs                          # core
+│       └── market_data·stock_info·market_info·account·order·order_info.rs
+└── global/                                 # KR-주식 perp 거래소·DEX (venue별 6파일: config·error·client·market·trade·mod)
+    ├── binance·bybit·mexc·htx·phemex·bitunix·toobit·weex/       # CEX (HMAC 계열)
+    ├── hyperliquid/   # Trade.xyz HIP-3 — EIP-712+secp256k1
+    └── lighter/       # zkLighter — Poseidon2/Schnorr + realtime(WS)
 docs/
-├── specs/    # 설계 문서
-├── plans/    # 구현 계획 (KIS Plan 1~3)
-├── kis-api/  # KIS TR 명세 레퍼런스 (SSOT)
-└── toss-api/ # Toss OpenAPI 스펙 + 엔드포인트 요약
+├── specs/     # 설계 문서
+├── plans/     # 구현 계획 (KIS Plan 1~3)
+├── research/  # perp venue 센서스 + 어댑터 빌드 계약서
+├── kis-api/   # KIS TR 명세 레퍼런스 (SSOT)
+└── toss-api/  # Toss OpenAPI 스펙 + 엔드포인트 요약
 examples/
-├── kis_*    # kis_domestic_quote, kis_domestic_order, kis_overseas_quote, kis_futureoption_quote, kis_realtime_feed
-├── toss_*   # toss_quote, toss_order
-└── binance_kr_*  # binance_kr_quote (시세), binance_kr_order (테스트넷 주문)
+├── kis_* · toss_*                          # 증권사 시세·주문
+├── <venue>_kr_quote                        # venue별 키 불필요 라이브 시세 (binance·bybit·htx·phemex·toobit·weex·bitunix)
+└── kr_perp_live_check                      # binance·hyperliquid·lighter·mexc 통합 라이브 검증
 ```
 
 ## 테스트
 
 ```
-cargo test                                    # 단위 141건 (4개 perp venue 포함)
+cargo test                                    # 단위 250건 (10개 perp venue 포함)
 cargo test --test integration -- --ignored    # 통합 24건 — 자격증명 필요
 ```
 

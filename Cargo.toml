@@ -72,3 +72,24 @@ name = "binance_kr_quote"
 
 [[example]]
 name = "binance_kr_order"
+
+[[example]]
+name = "kr_perp_live_check"
+
+[[example]]
+name = "bybit_kr_quote"
+
+[[example]]
+name = "bitunix_kr_quote"
+
+[[example]]
+name = "htx_kr_quote"
+
+[[example]]
+name = "phemex_kr_quote"
+
+[[example]]
+name = "toobit_kr_quote"
+
+[[example]]
+name = "weex_kr_quote"

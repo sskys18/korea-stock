@@ -1,10 +1,14 @@
 # korea-stock
 
-한국투자증권(KIS) + 토스증권(Toss) OpenAPI를 Rust에서 타입 안전하게 쓰는 멀티 브로커 비동기 어댑터.
+한국투자증권(KIS) + 토스증권(Toss) + 암호화폐 거래소·DEX의 한국주식 무기한선물을
+Rust에서 타입 안전하게 쓰는 멀티 venue 비동기 어댑터.
 
 KIS는 국내주식·해외주식·국내선물옵션 거래/조회 + 실시간 WebSocket 시세를,
-Toss는 국내·미국 주식 시세·종목정보·시장정보·계좌·자산·주문(20개 엔드포인트)을
-단일 크레이트의 형제 모듈(`kis`, `toss`)로 제공한다.
+Toss는 국내·미국 주식 시세·종목정보·시장정보·계좌·자산·주문(20개 엔드포인트)을,
+그리고 `binance`·`hyperliquid`·`lighter`·`mexc`는 2026년 상장된 한국 대형주
+(삼성전자·SK하이닉스·현대차) 무기한선물(perp) 시세·거래를 단일 크레이트의
+형제 모듈로 제공한다(공유 트레이트 없음). 자세한 능력 매트릭스는
+[`docs/specs/2026-06-02-kr-perp-venues-design.md`](docs/specs/2026-06-02-kr-perp-venues-design.md).
 
 ## 특징
 
@@ -161,6 +165,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 설계 근거는 [`docs/specs/2026-06-02-toss-adapter-design.md`](docs/specs/2026-06-02-toss-adapter-design.md),
 엔드포인트 요약은 [`docs/toss-api/endpoints.md`](docs/toss-api/endpoints.md) 참조.
 
+## 암호화폐 거래소·DEX — KR 주식 무기한선물 (perp)
+
+2026년 다수 CEX·perp DEX가 한국 대형주(삼성전자·SK하이닉스·현대차) 무기한선물을
+상장했다. 각 venue는 KIS/Toss와 동일한 독립 형제 모듈이다. 시세는 모두 라이브
+검증됐고, **거래 코드는 오프라인(파싱·서명벡터)만 검증 — 어떤 venue도 testnet/live로
+실주문된 적 없다. 실자금 전 testnet 왕복 필수.**
+
+| 모듈 | 종류 | 시세 | 거래 | 서명 |
+|---|---|---|---|---|
+| `binance` | CEX | ✅ | 주문/취소/포지션/잔고/레버리지 | HMAC-SHA256 (공식 doc 벡터 검증) |
+| `hyperliquid` | DEX (HIP-3/Trade.xyz) | ✅ | 주문(IOC)/취소 | EIP-712+secp256k1 (서명 primitive upstream SDK 벡터 검증) |
+| `mexc` | CEX | ✅ | 조회만 (신규주문 서버측 차단) | HMAC-SHA256 |
+| `lighter` | DEX (zk) | ✅ +WS | 주문/취소 (게이트) | Poseidon2+Schnorr 순수Rust (암호코어 upstream 벡터 검증, tx봉투 미검증) |
+
+```rust
+use korea_stock::binance::{BinanceClient, BinanceConfig, SAMSUNG};
+let client = BinanceClient::new(BinanceConfig::public())?;   // 시세는 키 불필요
+let idx = client.market().premium_index(SAMSUNG).await?;     // 마크가·펀딩
+```
+
+- 환경변수: `BINANCE_API_KEY/SECRET`, `HYPERLIQUID_*`(비밀키), `MEXC_*`, `LIGHTER_*`.
+- Lighter 거래는 `LighterConfig::allow_unverified_signing`(기본 false) 게이트 뒤 —
+  tx_info 봉투가 미검증이므로 `scripts/lighter_capture_vector.md`로 공식 SDK 출력과
+  대조 후 해제할 것.
+- Hyperliquid 운영 주문은 `trade().place_by_coin(DEX, coin, ...)` 사용 — asset id를
+  라이브 meta에서 재도출해 wrong-instrument 사고를 막는다.
+
 ## 프로젝트 구조
 
 ```
@@ -170,9 +201,13 @@ src/
 │   ├── config.rs ─ error.rs ─ trid.rs ─ auth.rs ─ client.rs   # core
 │   ├── domestic_stock/   overseas_stock/   futureoption/        # REST 도메인
 │   └── realtime/         # WebSocket — approval·subscribe·decode·crypto·run
-└── toss/                                   # 토스증권
-    ├── config.rs ─ error.rs ─ auth.rs ─ client.rs              # core
-    └── market_data·stock_info·market_info·account·order·order_info.rs
+├── toss/                                   # 토스증권
+│   ├── config.rs ─ error.rs ─ auth.rs ─ client.rs              # core
+│   └── market_data·stock_info·market_info·account·order·order_info.rs
+├── binance/      # Binance USDM Futures — config·error·client(HMAC)·market·trade
+├── hyperliquid/  # Trade.xyz HIP-3 — client(EIP-712)·market·trade
+├── lighter/      # zkLighter — client·market·trade·realtime(WS)·sign(Poseidon2/Schnorr)
+└── mexc/                                   # MEXC Contract — client(HMAC)·market·trade
 docs/
 ├── specs/    # 설계 문서
 ├── plans/    # 구현 계획 (KIS Plan 1~3)
@@ -180,13 +215,14 @@ docs/
 └── toss-api/ # Toss OpenAPI 스펙 + 엔드포인트 요약
 examples/
 ├── kis_*    # kis_domestic_quote, kis_domestic_order, kis_overseas_quote, kis_futureoption_quote, kis_realtime_feed
-└── toss_*   # toss_quote, toss_order
+├── toss_*   # toss_quote, toss_order
+└── binance_kr_*  # binance_kr_quote (시세), binance_kr_order (테스트넷 주문)
 ```
 
 ## 테스트
 
 ```
-cargo test --all-features                     # 단위 42건
+cargo test                                    # 단위 141건 (4개 perp venue 포함)
 cargo test --test integration -- --ignored    # 통합 24건 — 자격증명 필요
 ```
 

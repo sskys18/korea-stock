@@ -6,8 +6,8 @@
 //! testnet 키는 <https://testnet.binancefuture.com> 에서 발급한다.
 //! 운영 전환은 `.testnet()` 호출을 제거하면 된다 — 그 즉시 실자금이 움직인다.
 
-use korea_stock::binance::trade::{OrderRequest, Side};
-use korea_stock::binance::{BinanceClient, BinanceConfig, SAMSUNG};
+use korea_stock::global::binance::trade::{OrderRequest, Side};
+use korea_stock::global::binance::{BinanceClient, BinanceConfig, SAMSUNG};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

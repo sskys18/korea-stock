@@ -3,7 +3,7 @@
 //!
 //! 삼성전자·SK하이닉스·현대차 무기한선물의 마크가·펀딩비·호가를 조회한다.
 
-use korea_stock::binance::{BinanceClient, BinanceConfig, KR_SYMBOLS};
+use korea_stock::global::binance::{BinanceClient, BinanceConfig, KR_SYMBOLS};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

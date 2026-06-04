@@ -4,7 +4,7 @@
 //! 실제 주문 호출에서 hashkey 관련 KIS 오류가 나면 `KisConfig.use_hashkey = true`로
 //! 설정한 클라이언트로 재시도한다.
 
-use korea_stock::kis::domestic_stock::{BalanceBasis, OrderType};
+use korea_stock::domestic::kis::domestic_stock::{BalanceBasis, OrderType};
 use korea_stock::{KisClient, KisConfig};
 
 #[tokio::main]

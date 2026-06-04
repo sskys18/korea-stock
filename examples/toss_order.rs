@@ -15,7 +15,7 @@
 //! 안전장치: 실제 매수 주문은 `TOSS_LIVE_ORDER=1` 일 때만 전송한다. 미설정 시
 //! 주문 파라미터만 구성해 dry-run 안내를 출력하고 호출하지 않는다 (실주문 오발 방지).
 
-use korea_stock::toss::order::{OrderCreate, OrderType, Side};
+use korea_stock::domestic::toss::order::{OrderCreate, OrderType, Side};
 use korea_stock::{TossClient, TossConfig};
 
 #[tokio::main]

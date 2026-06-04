@@ -3,11 +3,15 @@
 한국투자증권(KIS) + 토스증권(Toss) + 암호화폐 거래소·DEX의 한국주식 무기한선물을
 Rust에서 타입 안전하게 쓰는 멀티 venue 비동기 어댑터.
 
-KIS는 국내주식·해외주식·국내선물옵션 거래/조회 + 실시간 WebSocket 시세를,
-Toss는 국내·미국 주식 시세·종목정보·시장정보·계좌·자산·주문(20개 엔드포인트)을,
-그리고 `binance`·`hyperliquid`·`lighter`·`mexc`는 2026년 상장된 한국 대형주
-(삼성전자·SK하이닉스·현대차) 무기한선물(perp) 시세·거래를 단일 크레이트의
-형제 모듈로 제공한다(공유 트레이트 없음). 자세한 능력 매트릭스는
+venue는 두 그룹으로 묶인다. **`domestic`** — 국내 증권사(`kis`·`toss`): KIS는
+국내·해외주식·국내선물옵션 거래/조회 + 실시간 WebSocket 시세를, Toss는 국내·미국
+주식 시세·종목정보·시장정보·계좌·자산·주문(20개 엔드포인트)을 제공한다.
+**`global`** — 한국 대형주(삼성전자·SK하이닉스·현대차) 무기한선물(perp)을 상장한
+글로벌 거래소·DEX(`binance`·`hyperliquid`·`lighter`·`mexc` …): 시세·거래.
+
+공유 트레이트는 없다(서명·주문모델 상이). 종목 식별자만 [`KrStock`] enum으로
+공유하고, 각 venue가 `KrStock`→자기 심볼로 매핑한다(`global::binance::symbol` 등).
+자세한 능력 매트릭스는
 [`docs/specs/2026-06-02-kr-perp-venues-design.md`](docs/specs/2026-06-02-kr-perp-venues-design.md).
 
 ## 특징
@@ -71,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | 실시간 WS | `client.realtime()` | 국내 6종(체결가·호가·예상체결·장운영·회원사·프로그램) × KRX/NXT/통합, 체결통보, 해외체결가 |
 
 ```rust
-use korea_stock::kis::overseas_stock::OverseasExchange;
+use korea_stock::domestic::kis::overseas_stock::OverseasExchange;
 
 let aapl = client
     .overseas_stock()
@@ -120,7 +124,7 @@ hashkey 관련 오류가 나면 `true`로 바꿔 재시도한다.
 
 ## 토스증권 (Toss)
 
-`korea_stock::toss` 모듈. KIS와 동일 크레이트 내 형제 모듈로, 공통 레이트리미터를 공유한다.
+`korea_stock::domestic::toss` 모듈. KIS와 함께 `domestic` 그룹에 묶이며 공통 레이트리미터를 공유한다.
 
 - **20개 엔드포인트 타입 구현** — 시세(호가·현재가·체결·상하한가·캔들), 종목정보, 시장정보(환율·장운영),
   계좌, 자산(보유주식), 주문(생성·정정·취소·목록·상세), 주문정보(매수가능·판매가능·수수료)
@@ -168,7 +172,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## 암호화폐 거래소·DEX — KR 주식 무기한선물 (perp)
 
 2026년 다수 CEX·perp DEX가 한국 대형주(삼성전자·SK하이닉스·현대차) 무기한선물을
-상장했다. 각 venue는 KIS/Toss와 동일한 독립 형제 모듈이다. 시세는 모두 라이브
+상장했다. 각 venue는 `global` 그룹의 독립 모듈이다(공유 트레이트 없음). 시세는 모두 라이브
 검증됐고, **거래 코드는 오프라인(파싱·서명벡터)만 검증 — 어떤 venue도 testnet/live로
 실주문된 적 없다. 실자금 전 testnet 왕복 필수.**
 
@@ -180,7 +184,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `lighter` | DEX (zk) | ✅ +WS | 주문/취소 (게이트) | Poseidon2+Schnorr 순수Rust (암호코어 upstream 벡터 검증, tx봉투 미검증) |
 
 ```rust
-use korea_stock::binance::{BinanceClient, BinanceConfig, SAMSUNG};
+use korea_stock::global::binance::{BinanceClient, BinanceConfig, SAMSUNG};
 let client = BinanceClient::new(BinanceConfig::public())?;   // 시세는 키 불필요
 let idx = client.market().premium_index(SAMSUNG).await?;     // 마크가·펀딩
 ```

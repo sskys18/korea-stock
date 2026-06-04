@@ -6,8 +6,10 @@ Rust에서 타입 안전하게 쓰는 멀티 venue 비동기 어댑터.
 venue는 두 그룹으로 묶인다. **`domestic`** — 국내 증권사(`kis`·`toss`): KIS는
 국내·해외주식·국내선물옵션 거래/조회 + 실시간 WebSocket 시세를, Toss는 국내·미국
 주식 시세·종목정보·시장정보·계좌·자산·주문(20개 엔드포인트)을 제공한다.
-**`global`** — 한국 대형주(삼성전자·SK하이닉스·현대차) 무기한선물(perp)을 상장한
-글로벌 거래소·DEX(`binance`·`hyperliquid`·`lighter`·`mexc` …): 시세·거래.
+**`global`** — 한국 대형주(삼성전자·SK하이닉스·현대차, 일부 KOSPI200 지수) 무기한선물
+(perp)을 상장한 글로벌 거래소·DEX **16곳**(CEX 12: binance·bybit·bitget·kucoin·
+gateio·bingx·mexc·htx·phemex·bitunix·toobit·weex / DEX 4: hyperliquid·lighter·
+aster·pacifica): 시세·거래.
 
 공유 트레이트는 없다(서명·주문모델 상이). 종목 식별자만 [`KrStock`] enum으로
 공유하고, 각 venue가 `KrStock`→자기 심볼로 매핑한다(`global::binance::symbol` 등).
@@ -181,6 +183,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 |---|---|---|---|---|
 | `binance` | CEX | ✅ | 주문/취소/포지션/잔고/레버리지 | HMAC-SHA256 (공식 doc 벡터 검증) |
 | `bybit` | CEX (v5 linear) | ✅ | 주문/취소/포지션/잔고 | HMAC-SHA256 (openssl 벡터 검증) |
+| `bitget` | CEX (USDT-M) | ✅ | 주문/취소/포지션 | HMAC-SHA256 Base64 + passphrase (openssl 벡터 검증) |
+| `kucoin` | CEX (futures) | ✅ | 주문/취소/포지션 | HMAC-SHA256 Base64 + passphrase v2 (openssl 벡터 검증) |
+| `gateio` | CEX (USDT perp) | ✅ | 주문/취소 | HMAC-SHA512 (공식 Python gen_sign 벡터 검증) |
+| `bingx` | CEX (perp swap) | ✅ | 주문/취소/포지션/레버리지 | HMAC-SHA256 (공식 doc 벡터 검증) |
 | `mexc` | CEX | ✅ | 조회만 (신규주문 서버측 차단) | HMAC-SHA256 |
 | `htx` | CEX (USDT-M swap) | ✅ | 주문/취소/포지션 | HMAC-SHA256 Base64, GET-스타일 prehash (openssl 교차검증) |
 | `phemex` | CEX (Perp v2) | ✅ | 주문/취소/포지션 | HMAC-SHA256, base64url 시크릿 (공식 doc 벡터 검증) |
@@ -189,9 +195,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `weex` | CEX | ✅ | 주문/취소/포지션 | HMAC-SHA256 Base64 |
 | `hyperliquid` | DEX (HIP-3/Trade.xyz) | ✅ | 주문(IOC)/취소 | EIP-712+secp256k1 (서명 primitive upstream SDK 벡터 검증) |
 | `lighter` | DEX (zk) | ✅ +WS | 주문/취소 (게이트) | Poseidon2+Schnorr 순수Rust (암호코어 upstream 벡터 검증, tx봉투 미검증) |
+| `aster` | DEX (BNB Chain) | ✅ | 주문/취소/포지션 | HMAC-SHA256 (Binance-호환 fapi, 2 doc 벡터 검증; on-chain EIP-712 미구현) |
+| `pacifica` | DEX (Solana) | ✅ | 주문/취소 (게이트) | Ed25519+base58 (공식 python-sdk 골든벡터 검증, 봉투 검증) |
 
-`binance`·`bybit`·`hyperliquid`는 KOSPI200 지수도 매핑(`hyperliquid`만 상장 — `xyz:KR200`).
-`bitunix` KR 심볼은 현재 `symbolStatus=PREVIEW`(상장 전, mark만 응답).
+**16 venue** (CEX 12 / DEX 4). 종목 커버리지 차이:
+- **KOSPI200 지수**: `hyperliquid`(`xyz:KR200`)·`bingx`(`NCSIKOSPI2USD-USDT`)·`lighter`(`KRCOMP`)만 상장. 그 외 `symbol(KrStock::Kospi200)`은 `None`.
+- **현대차 미상장**: `bingx`·`aster`·`pacifica`는 삼성·SK하이닉스만 → `symbol(KrStock::HyundaiMotor)`은 `None`.
+- `bitunix` KR 심볼은 현재 `symbolStatus=PREVIEW`(상장 전, mark만 응답).
+- `pacifica` 거래는 `allow_unverified_signing`(기본 false) 게이트 뒤(`lighter`와 동일).
 
 ```rust
 use korea_stock::global::binance::{BinanceClient, BinanceConfig, SAMSUNG};
@@ -225,9 +236,11 @@ src/
 │       ├── config·error·auth·client.rs                          # core
 │       └── market_data·stock_info·market_info·account·order·order_info.rs
 └── global/                                 # KR-주식 perp 거래소·DEX (venue별 6파일: config·error·client·market·trade·mod)
-    ├── binance·bybit·mexc·htx·phemex·bitunix·toobit·weex/       # CEX (HMAC 계열)
+    ├── binance·bybit·bitget·kucoin·gateio·bingx·mexc·htx·phemex·bitunix·toobit·weex/  # CEX 12 (HMAC 계열)
     ├── hyperliquid/   # Trade.xyz HIP-3 — EIP-712+secp256k1
-    └── lighter/       # zkLighter — Poseidon2/Schnorr + realtime(WS)
+    ├── lighter/       # zkLighter — Poseidon2/Schnorr + realtime(WS) + sign.rs
+    ├── aster/         # BNB Chain — Binance-호환 fapi HMAC
+    └── pacifica/      # Solana — Ed25519 + sign.rs (게이트)
 docs/
 ├── specs/     # 설계 문서
 ├── plans/     # 구현 계획 (KIS Plan 1~3)
@@ -243,7 +256,7 @@ examples/
 ## 테스트
 
 ```
-cargo test                                    # 단위 250건 (10개 perp venue 포함)
+cargo test                                    # 단위 349건 (16개 perp venue 포함)
 cargo test --test integration -- --ignored    # 통합 24건 — 자격증명 필요
 ```
 

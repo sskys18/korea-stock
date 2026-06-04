@@ -3,7 +3,7 @@ name = "korea-stock"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
-description = "한국투자증권(KIS) + 토스증권(Toss) OpenAPI Rust 어댑터"
+description = "한국투자증권(KIS)·토스증권(Toss) + 한국주식 무기한선물 perp(Binance·Hyperliquid·Lighter·MEXC) Rust 어댑터"
 license = "MIT"
 
 [dependencies]

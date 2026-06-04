@@ -90,6 +90,8 @@ pub fn symbol(stock: crate::KrStock) -> Option<&'static str> {
         SamsungElec => SAMSUNGUSD,
         SkHynix => SKHYNIXUSD,
         HyundaiMotor => HYUNDAIUSD,
-        Kospi200 => KR_COMPOSITE, // Korea-composite 지수(market_id=142)
+        // Korea-composite 지수(market_id=142). **현재 inactive** — 심볼은 상장돼
+        // 있으나 체결되지 않는다(bitunix PREVIEW와 동일하게 Some 유지 + 상태 별도확인).
+        Kospi200 => KR_COMPOSITE,
     })
 }

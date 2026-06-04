@@ -8,7 +8,8 @@
 //! 공유 트레이트는 없다(서명·주문모델 상이). 브로커 비종속 레이트리미터(`ratelimit`)와
 //! 종목 어휘([`KrStock`])만 공유한다 — 각 venue가 `global::<venue>::symbol(KrStock)`로
 //! 자기 심볼에 매핑한다. perp venue는 2026년 상장된 삼성전자·SK하이닉스·현대차(일부는
-//! KOSPI200 지수) 무기한선물을 대상으로 하며, 능력 매트릭스·검증 상태는
+//! KOSPI200 지수) 무기한선물을 대상으로 한다. 전체 venue 센서스(16곳·심볼·검증 상태)는
+//! `docs/research/kr-stock-perp-venues-2026-06.md`, 원본 4종 설계는
 //! `docs/specs/2026-06-02-kr-perp-venues-design.md` 참조.
 
 pub mod domestic;

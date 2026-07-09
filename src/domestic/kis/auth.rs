@@ -71,6 +71,15 @@ impl Auth {
         Ok(token)
     }
 
+    /// 캐시된 토큰 무효화 — 메모리 상태 + 파일 캐시 삭제. 서버측 만료·무효
+    /// (EGW00123/EGW00121)로 로컬 캐시가 stale일 때 다음 `token()`이 신규 발급하도록.
+    pub async fn invalidate(&self) {
+        *self.state.lock().await = None;
+        if let Some(path) = self.cache_path.as_ref() {
+            let _ = tokio::fs::remove_file(path).await;
+        }
+    }
+
     /// 토큰 캐시 스코프 — `{rest_base}|{app_key}`. 환경·앱키별 격리.
     fn scope(&self) -> String {
         format!("{}|{}", self.rest_base, self.app_key)

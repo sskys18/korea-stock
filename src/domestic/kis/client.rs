@@ -170,10 +170,13 @@ impl KisClient {
         Ok(resp.envelope(data))
     }
 
-    /// 도메인 모듈 공용 호출. EGW00201(초당 거래건수 초과) 시 지수 백오프 재시도.
+    /// 도메인 모듈 공용 호출. EGW00201(초당 거래건수 초과) 시 지수 백오프 재시도;
+    /// EGW00123/EGW00121(만료·무효 토큰) 시 캐시 무효화 후 재발급 1회 재시도 —
+    /// 로컬 만료시각은 미래여도 서버가 다른 발급으로 토큰을 무효화한 경우 자가복구.
     pub(crate) async fn call(&self, c: ApiCall) -> Result<RawResponse> {
         const MAX_RETRIES: u32 = 4;
         let mut attempt = 0;
+        let mut token_refreshed = false;
         loop {
             match self.call_once(&c).await {
                 Err(KisError::Api { msg_cd, .. })
@@ -188,6 +191,16 @@ impl KisClient {
                     );
                     tokio::time::sleep(backoff).await;
                     attempt += 1;
+                }
+                Err(KisError::Api { msg_cd, .. })
+                    if (msg_cd == "EGW00123" || msg_cd == "EGW00121")
+                        && !token_refreshed =>
+                {
+                    tracing::warn!(
+                        "{msg_cd} expired/invalid access token — invalidating cache and reissuing"
+                    );
+                    self.auth.invalidate().await;
+                    token_refreshed = true;
                 }
                 other => return other,
             }

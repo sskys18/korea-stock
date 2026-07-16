@@ -58,8 +58,8 @@ pub struct StockTrade {
     pub vi_stnd_prc: String,                  // 46 정적 VI 발동기준가
 }
 
-/// 국내주식 실시간호가 (H0STASP0). 59개 필드 (idx 0~58).
-/// 필드표 전체는 docs/kis-api/realtime.md §B-2 — 순번 1~59 verbatim.
+/// 국내주식 실시간호가 (H0STASP0). KRX 62필드 = 코어 59(idx 0~58) + KRX 중간가 3(idx 59~61).
+/// 코어 필드표는 docs/kis-api/realtime.md §B-2 (순번 1~59); idx 59~61은 KIS가 KRX에 추가한 중간가.
 #[derive(Debug, Clone)]
 pub struct StockAsking {
     pub mksc_shrn_iscd: String,            // idx 0 유가증권 단축 종목코드
@@ -121,7 +121,8 @@ pub struct StockAsking {
     pub ovtm_total_askp_rsqn_icdc: String, // idx 56 시간외 총 매도호가 잔량 (증감)
     pub ovtm_total_bidp_rsqn_icdc: String, // idx 57 시간외 총 매수호가 잔량 (증감)
     pub stck_bsop_cls_code: String,        // idx 58 주식매매 구분코드
-    // idx 59~64: NXT/통합(H0NXASP0/H0UNASP0)만 존재 — 중간가호가. KRX(H0STASP0)는 빈 String.
+    // idx 59~61: KRX 중간가 — 라이브 H0STASP0(62필드)에 존재. idx 62~64: NXT 중간가 —
+    // H0NXASP0/H0UNASP0(65필드)에만 존재. 없는 필드는 안전 getter가 빈 String 처리.
     pub kmid_prc: String,        // idx 59 KRX 중간가
     pub kmid_total_rsqn: String, // idx 60 KRX 중간가 총잔량
     pub kmid_cls_code: String,   // idx 61 KRX 중간가 구분코드
@@ -318,8 +319,8 @@ fn fields_per_record(tr_id: &str) -> Option<usize> {
     match tr_id {
         // 체결가 CNT — 3시장 동일 46.
         "H0STCNT0" | "H0NXCNT0" | "H0UNCNT0" => Some(46),
-        // 호가 ASP — KRX 59, NXT/통합 65 (중간가 6필드 추가).
-        "H0STASP0" => Some(59),
+        // 호가 ASP — KRX 62 (코어 59 + KRX 중간가 3필드 idx59~61), NXT/통합 65 (+ NXT 중간가 3).
+        "H0STASP0" => Some(62),
         "H0NXASP0" | "H0UNASP0" => Some(65),
         // 예상체결 ANC — KRX 45, NXT/통합 46 (VI 기준가 추가).
         "H0STANC0" => Some(45),
@@ -798,15 +799,17 @@ mod tests {
     }
 
     #[test]
-    fn krx_asking_mid_price_tail_is_empty() {
-        // KRX 호가 59필드 — 중간가 필드 없음 → 안전 getter가 빈 String (OOB 패닉 없음).
-        let body: String = (0..59).map(|i| i.to_string()).collect::<Vec<_>>().join("^");
+    fn krx_asking_has_kmid_price_tail() {
+        // 라이브 KRX 호가 62필드 — KIS가 추가한 KRX 중간가 3필드(idx59~61)는 채워지고,
+        // NXT 중간가(idx62~64)는 없음(안전 getter가 빈 String).
+        let body: String = (0..62).map(|i| i.to_string()).collect::<Vec<_>>().join("^");
         let raw = format!("0|H0STASP0|001|{body}");
         let recs = decode_frame(&raw, None).unwrap();
         match &recs[0] {
             DecodedRecord::StockAsking(a) => {
                 assert_eq!(a.stck_bsop_cls_code, "58");
-                assert!(a.kmid_prc.is_empty());
+                assert_eq!(a.kmid_prc, "59");
+                assert_eq!(a.kmid_cls_code, "61");
                 assert!(a.nmid_cls_code.is_empty());
             }
             _ => panic!("wrong variant"),
